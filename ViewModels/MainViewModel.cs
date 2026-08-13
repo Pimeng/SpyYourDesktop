@@ -217,6 +217,30 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         private set => SetProperty(ref _statusText, value);
     }
 
+    public string GreetingText => $"{GetTimeGreeting()}，{GetCurrentUserName()}";
+
+    private static string GetTimeGreeting() => DateTime.Now.Hour switch
+    {
+        >= 5 and < 12 => "早上好",
+        >= 12 and < 14 => "中午好",
+        >= 14 and < 19 => "下午好",
+        >= 19 => "晚上好",
+        _ => "夜深了"
+    };
+
+    private static string GetCurrentUserName()
+    {
+        try
+        {
+            var userName = Environment.UserName.Trim();
+            return string.IsNullOrWhiteSpace(userName) ? "朋友" : userName;
+        }
+        catch
+        {
+            return "朋友";
+        }
+    }
+
     public string LastSentAt
     {
         get => _lastSentAt;

@@ -3,9 +3,9 @@ using Microsoft.UI.Xaml.Navigation;
 
 namespace Desktop.Views;
 
-public sealed partial class StrategyPage : Page
+public sealed partial class AdvancedPage : Page
 {
-    public StrategyPage()
+    public AdvancedPage()
     {
         InitializeComponent();
     }

@@ -33,7 +33,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Spacing="8">
-                        <TextBlock Text="上报窗口标题" FontSize="24" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding GreetingText}" FontSize="24" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding StatusText}" Foreground="{ThemeResource BrandBrush}" FontSize="16" FontWeight="SemiBold" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">

@@ -26,12 +26,12 @@
                     <SymbolIcon Symbol="Globe" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="采集策略" Tag="Strategy">
+            <NavigationViewItem Content="高级设置" Tag="Advanced">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Edit" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="更新与日志" Tag="Updates">
+            <NavigationViewItem Content="其他" Tag="Updates">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Download" />
                 </NavigationViewItem.Icon>

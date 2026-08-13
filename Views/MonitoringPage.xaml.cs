@@ -30,7 +30,7 @@ public sealed partial class MonitoringPage : Page
         var pageType = tag switch
         {
             "Connection" => typeof(ConnectionPage),
-            "Strategy" => typeof(StrategyPage),
+            "Advanced" => typeof(AdvancedPage),
             "Updates" => typeof(UpdatesPage),
             _ => typeof(OverviewPage)
         };
