@@ -26,6 +26,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private Task? _privacyTask;
     private Task? _startupTask;
     private Task? _updateCheckTask;
+    private CancellationTokenSource? _configurationSaveCancellation;
+    private Task? _configurationSaveTask;
 
     private string _serverUrl = "http://127.0.0.1:3000/api/ingest";
     private int _intervalSeconds = MinimumIntervalSeconds;
@@ -657,6 +659,45 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private async Task SaveConfigurationAsync()
         => await SaveConfigurationAsync(_applicationCancellation.Token, force: true);
 
+    private void QueueConfigurationSave()
+    {
+        if (!_isInitialized || _isDisposed)
+        {
+            return;
+        }
+
+        _configurationSaveCancellation?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        _configurationSaveCancellation = cancellation;
+        _configurationSaveTask = SaveConfigurationAfterDelayAsync(cancellation);
+    }
+
+    private async Task SaveConfigurationAfterDelayAsync(CancellationTokenSource cancellation)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(300), cancellation.Token);
+            await SaveConfigurationAsync(cancellation.Token, force: true);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+        }
+        catch (Exception exception)
+        {
+            await _logger.LogAsync($"[config-save] {exception.Message}");
+            ShowError($"配置保存失败：{exception.Message}");
+        }
+        finally
+        {
+            if (ReferenceEquals(_configurationSaveCancellation, cancellation))
+            {
+                _configurationSaveCancellation = null;
+            }
+
+            cancellation.Dispose();
+        }
+    }
+
     private async Task SaveConfigurationAsync(CancellationToken cancellationToken, bool force = false)
     {
         if (!_canPersistConfiguration && !force)
@@ -830,8 +871,22 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         return true;
     }
 
-    private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
+    private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
+    {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        if (_isInitialized && propertyName is
+            nameof(ServerUrl) or
+            nameof(IntervalSeconds) or
+            nameof(HeartbeatSeconds) or
+            nameof(MachineId) or
+            nameof(UploadKey) or
+            nameof(AutoStart) or
+            nameof(AllowBackground) or
+            nameof(ForceAllowLongTitle))
+        {
+            QueueConfigurationSave();
+        }
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -842,6 +897,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         _isDisposed = true;
         _applicationCancellation.Cancel();
+        _configurationSaveCancellation?.Cancel();
         _monitoringService.StatusChanged -= OnMonitoringStatusChanged;
         _monitoringService.UsageSent -= OnUsageSent;
         _monitoringService.Error -= OnMonitoringError;
@@ -863,12 +919,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
                 await _updateCheckTask;
             }
 
+            if (_configurationSaveTask is not null)
+            {
+                await _configurationSaveTask;
+            }
+
             await _monitoringService.StopAsync();
             if (_isInitialized)
             {
                 try
                 {
-                    await SaveConfigurationAsync(CancellationToken.None);
+                    await SaveConfigurationAsync(CancellationToken.None, force: true);
                 }
                 catch (Exception exception)
                 {
