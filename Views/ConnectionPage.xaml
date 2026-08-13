@@ -13,10 +13,7 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
             <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,22">
-                <TextBlock Text="连接与身份" Style="{StaticResource PageTitleStyle}" />
-                <TextBlock Text="设置数据发送到哪里，以及这台设备如何被识别。"
-                           FontSize="15"
-                           Opacity="0.7" />
+                <TextBlock Text="配置" Style="{StaticResource PageTitleStyle}" />
             </StackPanel>
 
             <Border Grid.Row="1"

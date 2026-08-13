@@ -16,7 +16,7 @@
 
             <StackPanel Grid.Row="0" Spacing="6">
                 <TextBlock Text="概览" Style="{StaticResource PageTitleStyle}" />
-                <TextBlock Text="查看监控状态，并快速开始或停止桌面活动上报。"
+                <TextBlock Text="我会一直一直视奸你"
                            FontSize="15"
                            Opacity="0.7" />
             </StackPanel>
@@ -33,12 +33,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Spacing="8">
-                        <TextBlock Text="桌面活动监控" FontSize="24" FontWeight="SemiBold" />
+                        <TextBlock Text="上报窗口标题" FontSize="24" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding StatusText}" Foreground="{ThemeResource BrandBrush}" FontSize="16" FontWeight="SemiBold" />
-                        <TextBlock Text="采集当前前台窗口，在标题变化或心跳到期时发送一次数据。"
-                                   MaxWidth="560"
-                                   TextWrapping="Wrap"
-                                   Opacity="0.7" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                         <Button Content="开始监控" Command="{Binding StartCommand}" Style="{StaticResource AccentButtonStyle}" />

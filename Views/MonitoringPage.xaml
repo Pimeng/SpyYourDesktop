@@ -21,7 +21,7 @@
                     <SymbolIcon Symbol="Home" />
                 </NavigationViewItem.Icon>
             </NavigationViewItem>
-            <NavigationViewItem Content="连接与身份" Tag="Connection">
+            <NavigationViewItem Content="配置" Tag="Connection">
                 <NavigationViewItem.Icon>
                     <SymbolIcon Symbol="Globe" />
                 </NavigationViewItem.Icon>
@@ -62,7 +62,15 @@
                             SkipRequested="UpdateActions_SkipRequested" />
                     </InfoBar.ActionButton>
                 </InfoBar>
-                <Frame x:Name="ContentFrame" Grid.Row="2" IsNavigationStackEnabled="False" />
+                <Frame x:Name="ContentFrame" Grid.Row="2" IsNavigationStackEnabled="False">
+                    <Frame.ContentTransitions>
+                        <TransitionCollection>
+                            <EntranceThemeTransition FromHorizontalOffset="28"
+                                                      FromVerticalOffset="0"
+                                                      IsStaggeringEnabled="False" />
+                        </TransitionCollection>
+                    </Frame.ContentTransitions>
+                </Frame>
             </Grid>
         </NavigationView.Content>
     </NavigationView>

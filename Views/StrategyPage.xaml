@@ -28,8 +28,7 @@
                     Padding="26">
                 <StackPanel Spacing="18">
                     <StackPanel Spacing="4">
-                        <TextBlock Text="采样节奏" Style="{StaticResource SectionTitleStyle}" />
-                        <TextBlock Text="运行时连接设置会锁定，避免监控过程中改变数据目标。" Opacity="0.68" />
+                        <TextBlock Text="高级设置" Style="{StaticResource SectionTitleStyle}" />
                     </StackPanel>
                     <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
