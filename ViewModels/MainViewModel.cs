@@ -459,6 +459,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         {
             IsBusy = true;
             ClearMessages();
+            UpdateStatus = "正在检查更新...";
         }
 
         try
