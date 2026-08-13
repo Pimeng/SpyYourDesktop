@@ -104,28 +104,50 @@
                     Padding="26">
                 <StackPanel Spacing="14">
                     <TextBlock Text="运行方式" Style="{StaticResource SectionTitleStyle}" />
-                    <ComboBox Header="开机自启动"
-                              SelectedIndex="{Binding StartupModeIndex, Mode=TwoWay}"
-                              IsEnabled="{Binding CanEditSettings}"
-                              HorizontalAlignment="Stretch">
-                        <ComboBoxItem Content="禁用自启动" />
-                        <ComboBoxItem Content="开机静默自启动并启动监控" />
-                        <ComboBoxItem Content="开机显示窗口并启动监控" />
-                    </ComboBox>
-                    <ToggleSwitch Header="关闭窗口行为"
-                                  OnContent="最小化"
-                                  OffContent="退出"
-                                  IsOn="{Binding AllowBackground, Mode=TwoWay}"
-                                  IsEnabled="{Binding CanEditSettings}" />
-                    <ToggleSwitch Header="隐私模式"
-                                  OnContent="开（不上报任何内容）"
-                                  OffContent="关（正常上报）"
-                                  IsOn="{Binding PrivacyMode, Mode=TwoWay}" />
-                    <ToggleSwitch Header="是否上报过长标题"
-                                  OnContent="不截断"
-                                  OffContent="截断至 140 字符"
-                                  IsOn="{Binding ForceAllowLongTitle, Mode=TwoWay}"
-                                  IsEnabled="{Binding CanEditSettings}" />
+                    <Grid RowSpacing="14" ColumnSpacing="18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <ComboBox Grid.Row="0"
+                                  Header="开机自启动"
+                                  SelectedIndex="{Binding StartupModeIndex, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanEditSettings}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="禁用自启动" />
+                            <ComboBoxItem Content="开机静默自启动并启动监控" />
+                            <ComboBoxItem Content="开机显示窗口并启动监控" />
+                        </ComboBox>
+                        <ComboBox Grid.Row="0"
+                                  Grid.Column="1"
+                                  Header="关闭窗口行为"
+                                  SelectedIndex="{Binding WindowCloseModeIndex, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanEditSettings}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="最小化" />
+                            <ComboBoxItem Content="退出" />
+                        </ComboBox>
+                        <ComboBox Grid.Row="1"
+                                  Header="隐私模式"
+                                  SelectedIndex="{Binding PrivacyModeIndex, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="关（正常上报）" />
+                            <ComboBoxItem Content="开（不上报任何内容）" />
+                        </ComboBox>
+                        <ComboBox Grid.Row="1"
+                                  Grid.Column="1"
+                                  Header="是否上报过长标题"
+                                  SelectedIndex="{Binding LongTitleModeIndex, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanEditSettings}"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="截断至 140 字符" />
+                            <ComboBoxItem Content="不截断" />
+                        </ComboBox>
+                    </Grid>
                 </StackPanel>
             </Border>
         </Grid>

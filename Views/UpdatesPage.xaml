@@ -19,12 +19,13 @@
                            Opacity="0.7" />
             </StackPanel>
 
-            <Grid Grid.Row="1" ColumnSpacing="20">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            <Grid Grid.Row="1" RowSpacing="20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0"
+                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="12"
@@ -32,7 +33,6 @@
                     <StackPanel Spacing="14">
                         <TextBlock Text="应用更新" Style="{StaticResource SectionTitleStyle}" />
                         <TextBlock Text="{Binding UpdateStatus}" TextWrapping="Wrap" Opacity="0.72" />
-                        <ProgressBar Value="{Binding UpdateProgressPercent}" Maximum="100" />
                         <StackPanel Visibility="{Binding HasAvailableUpdate, Converter={StaticResource BooleanToVisibilityConverter}}" Spacing="10">
                             <TextBlock Text="{Binding UpdateTag}" FontWeight="SemiBold" />
                             <TextBlock Text="{Binding UpdateNotes}" MaxLines="7" TextWrapping="Wrap" Opacity="0.72" />
@@ -44,7 +44,7 @@
                         <Button Content="检查更新" Command="{Binding CheckForUpdatesCommand}" HorizontalAlignment="Left" />
                     </StackPanel>
                 </Border>
-                <Border Grid.Column="1"
+                <Border Grid.Row="1"
                         Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                         BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
@@ -55,10 +55,16 @@
                         <TextBlock Text="日志记录采集、上报、限流和更新过程，便于排查连接问题。"
                                    TextWrapping="Wrap"
                                    Opacity="0.7" />
-                        <Button Content="打开日志文件"
-                                Command="{Binding OpenLogCommand}"
-                                HorizontalAlignment="Left"
-                                Style="{StaticResource AccentButtonStyle}" />
+                        <TextBlock Text="{Binding CurrentLogFileName}"
+                                   TextWrapping="Wrap"
+                                   Opacity="0.7" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="打开日志文件"
+                                    Command="{Binding OpenLogCommand}"
+                                    Style="{StaticResource AccentButtonStyle}" />
+                            <Button Content="打开日志目录"
+                                    Command="{Binding OpenLogDirectoryCommand}" />
+                        </StackPanel>
                     </StackPanel>
                 </Border>
             </Grid>

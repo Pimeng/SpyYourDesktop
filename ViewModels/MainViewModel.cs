@@ -84,6 +84,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         SkipUpdateCommand = new AsyncCommand(SkipUpdateAsync, () => AvailableUpdate is not null && !IsBusy);
         OpenReleaseCommand = new RelayCommand(OpenReleasePage, () => AvailableUpdate is not null);
         OpenLogCommand = new RelayCommand(OpenLogFile);
+        OpenLogDirectoryCommand = new RelayCommand(OpenLogDirectory);
 
         _monitoringService.StatusChanged += OnMonitoringStatusChanged;
         _monitoringService.UsageSent += OnUsageSent;
@@ -103,6 +104,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public ICommand SkipUpdateCommand { get; }
     public ICommand OpenReleaseCommand { get; }
     public ICommand OpenLogCommand { get; }
+    public ICommand OpenLogDirectoryCommand { get; }
 
     public string ServerUrl
     {
@@ -169,7 +171,31 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public bool AllowBackground
     {
         get => _allowBackground;
-        set => SetProperty(ref _allowBackground, value);
+        set
+        {
+            if (!SetProperty(ref _allowBackground, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(WindowCloseModeIndex));
+        }
+    }
+
+    public int WindowCloseModeIndex
+    {
+        get => AllowBackground ? 0 : 1;
+        set
+        {
+            if (value is 0)
+            {
+                AllowBackground = true;
+            }
+            else if (value is 1)
+            {
+                AllowBackground = false;
+            }
+        }
     }
 
     public bool PrivacyMode
@@ -177,7 +203,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         get => _privacyMode;
         set
         {
-            if (!SetProperty(ref _privacyMode, value) || !_isInitialized || !IsRunning)
+            if (!SetProperty(ref _privacyMode, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(PrivacyModeIndex));
+            if (!_isInitialized || !IsRunning)
             {
                 return;
             }
@@ -186,10 +218,50 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
+    public int PrivacyModeIndex
+    {
+        get => PrivacyMode ? 1 : 0;
+        set
+        {
+            if (value is 0)
+            {
+                PrivacyMode = false;
+            }
+            else if (value is 1)
+            {
+                PrivacyMode = true;
+            }
+        }
+    }
+
     public bool ForceAllowLongTitle
     {
         get => _forceAllowLongTitle;
-        set => SetProperty(ref _forceAllowLongTitle, value);
+        set
+        {
+            if (!SetProperty(ref _forceAllowLongTitle, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(LongTitleModeIndex));
+        }
+    }
+
+    public int LongTitleModeIndex
+    {
+        get => ForceAllowLongTitle ? 1 : 0;
+        set
+        {
+            if (value is 0)
+            {
+                ForceAllowLongTitle = false;
+            }
+            else if (value is 1)
+            {
+                ForceAllowLongTitle = true;
+            }
+        }
     }
 
     public bool IsRunning
@@ -231,6 +303,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     }
 
     public string GreetingText => $"{GetTimeGreeting()}，{GetCurrentUserName()}";
+    public string CurrentLogFileName => $"当前正在写入：{Path.GetFileName(_paths.LogFile)}";
 
     private static string GetTimeGreeting() => DateTime.Now.Hour switch
     {
@@ -629,6 +702,23 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
+    private void OpenLogDirectory()
+    {
+        try
+        {
+            Directory.CreateDirectory(_paths.LogDirectory);
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = _paths.LogDirectory,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception exception)
+        {
+            ShowError($"无法打开日志目录：{exception.Message}");
+        }
+    }
+
     private async Task UpdateStartupAsync(StartupMode mode, StartupMode previousMode)
     {
         try
@@ -837,8 +927,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         OnPropertyChanged(nameof(UploadKey));
         OnPropertyChanged(nameof(StartupModeIndex));
         OnPropertyChanged(nameof(AllowBackground));
+        OnPropertyChanged(nameof(WindowCloseModeIndex));
         OnPropertyChanged(nameof(PrivacyMode));
+        OnPropertyChanged(nameof(PrivacyModeIndex));
         OnPropertyChanged(nameof(ForceAllowLongTitle));
+        OnPropertyChanged(nameof(LongTitleModeIndex));
     }
 
     private void RaiseCommandStates()
