@@ -425,6 +425,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _heartbeatSeconds = Math.Clamp(config.HeartbeatSeconds <= 0 ? MinimumHeartbeatSeconds : config.HeartbeatSeconds, MinimumHeartbeatSeconds, 3600);
         _machineId = config.MachineId?.Trim() ?? string.Empty;
         _uploadKey = config.UploadKey ?? string.Empty;
+        _showKey = config.ShowKey;
         _startupMode = config.StartupMode ?? (config.AutoStartLegacy == true ? StartupMode.Visible : StartupMode.Disabled);
         _allowBackground = config.AllowBackground;
         _forceAllowLongTitle = config.ForceAllowLongTitle;
@@ -812,6 +813,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             HeartbeatSeconds = Math.Clamp(HeartbeatSeconds, MinimumHeartbeatSeconds, 3600),
             MachineId = MachineId.Trim(),
             UploadKey = UploadKey,
+            ShowKey = ShowKey,
             StartupMode = _startupMode,
             AllowBackground = AllowBackground,
             SkippedVersion = _skippedVersion,
@@ -925,6 +927,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         OnPropertyChanged(nameof(HeartbeatSeconds));
         OnPropertyChanged(nameof(MachineId));
         OnPropertyChanged(nameof(UploadKey));
+        OnPropertyChanged(nameof(ShowKey));
         OnPropertyChanged(nameof(StartupModeIndex));
         OnPropertyChanged(nameof(AllowBackground));
         OnPropertyChanged(nameof(WindowCloseModeIndex));
@@ -984,6 +987,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             nameof(HeartbeatSeconds) or
             nameof(MachineId) or
             nameof(UploadKey) or
+            nameof(ShowKey) or
             nameof(StartupModeIndex) or
             nameof(AllowBackground) or
             nameof(ForceAllowLongTitle))

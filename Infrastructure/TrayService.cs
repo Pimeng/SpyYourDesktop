@@ -84,23 +84,35 @@ public sealed class TrayService : IDisposable
         CheckMenuItem(_menuHandle, MenuPrivacy, privacyMode ? MenuChecked : MenuEnabled);
     }
 
-    public void Show(bool isRunning)
+    public bool Show(bool isRunning)
     {
         if (_disposed || _windowHandle == IntPtr.Zero)
         {
-            return;
+            return false;
         }
 
         var data = CreateNotifyData();
         if (!_isVisible)
         {
-            Shell_NotifyIcon(NotifyAdd, ref data);
+            if (!Shell_NotifyIcon(NotifyAdd, ref data))
+            {
+                return false;
+            }
+
             _isVisible = true;
         }
 
         data.uFlags = NotifyTip;
         data.szTip = isRunning ? "SpyYourDesktop（运行中）" : "SpyYourDesktop";
-        Shell_NotifyIcon(NotifyModify, ref data);
+        if (Shell_NotifyIcon(NotifyModify, ref data))
+        {
+            return true;
+        }
+
+        var removeData = CreateNotifyData();
+        Shell_NotifyIcon(NotifyDelete, ref removeData);
+        _isVisible = false;
+        return false;
     }
 
     public void Hide()
@@ -122,9 +134,9 @@ public sealed class TrayService : IDisposable
             return;
         }
 
-        if (!_isVisible)
+        if (!Show(isRunning: true))
         {
-            Show(isRunning: true);
+            return;
         }
 
         var data = CreateNotifyData();

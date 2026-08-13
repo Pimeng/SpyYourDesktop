@@ -52,11 +52,16 @@ public sealed partial class MainWindow : Window
     public event EventHandler? ClosedByUser;
     public event EventHandler? ExitRequested;
 
-    public void HideToTray()
+    public bool HideToTray()
     {
         _tray.UpdateState(_viewModel.IsRunning, _viewModel.PrivacyMode);
-        _tray.Show(_viewModel.IsRunning);
+        if (!_tray.Show(_viewModel.IsRunning))
+        {
+            return false;
+        }
+
         _appWindow.Hide();
+        return true;
     }
 
     public void CloseForExit()
@@ -75,11 +80,14 @@ public sealed partial class MainWindow : Window
         if (_viewModel.AllowBackground)
         {
             args.Cancel = true;
-            HideToTray();
+            if (!HideToTray())
+            {
+                args.Cancel = false;
+            }
         }
     }
 
-    private void ShowFromTray()
+    public void ShowFromTray()
     {
         _tray.Hide();
         _appWindow.Show();
@@ -94,7 +102,10 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        HideToTray();
+        if (!HideToTray())
+        {
+            ShowFromTray();
+        }
     }
 
     private void OnClosed(object sender, WindowEventArgs args)

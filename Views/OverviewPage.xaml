@@ -27,18 +27,13 @@
                     BorderThickness="1"
                     CornerRadius="12"
                     Padding="26">
-                <Grid ColumnSpacing="28">
+                <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Spacing="8">
                         <TextBlock Text="{Binding GreetingText}" FontSize="24" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding StatusText}" Foreground="{ThemeResource BrandBrush}" FontSize="16" FontWeight="SemiBold" />
-                    </StackPanel>
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                        <Button Content="开始监控" Command="{Binding StartCommand}" Style="{StaticResource AccentButtonStyle}" />
-                        <Button Content="停止监控" Command="{Binding StopCommand}" />
                     </StackPanel>
                 </Grid>
             </Border>

@@ -15,13 +15,17 @@ namespace Desktop
     /// </summary>
     public partial class App : Application
     {
+        private const string InstanceMutexName = "SpyYourDesktop_Singleton";
+        private const string ShowWindowEventName = "SpyYourDesktop_ShowWindow";
         private readonly Mutex _instanceMutex;
+        private readonly EventWaitHandle _showWindowEvent;
         private readonly AppPaths _paths = null!;
         private readonly FileLogger _logger = null!;
         private readonly MainViewModelFactory? _factory;
         private MainWindow? _window;
         private MainViewModel? _viewModel;
         private TrayService? _tray;
+        private RegisteredWaitHandle? _showWindowWait;
         private Task? _initializationTask;
         private bool _shutdownStarted;
 
@@ -33,10 +37,12 @@ namespace Desktop
         {
             InitializeComponent();
 
-            _instanceMutex = new Mutex(true, "SpyYourDesktop_Singleton", out var createdNew);
+            // Create the event before checking the mutex so a fast second launch cannot miss the signal.
+            _showWindowEvent = new EventWaitHandle(false, EventResetMode.AutoReset, ShowWindowEventName);
+            _instanceMutex = new Mutex(true, InstanceMutexName, out var createdNew);
             if (!createdNew)
             {
-                NativeMethods.ShowMessage("应用已在运行。", "SpyYourDesktop");
+                _showWindowEvent.Set();
                 return;
             }
 
@@ -53,6 +59,8 @@ namespace Desktop
         {
             if (_factory is null)
             {
+                // There is no window to keep this secondary process alive.
+                Environment.Exit(0);
                 return;
             }
 
@@ -69,6 +77,18 @@ namespace Desktop
             _window = new MainWindow(_viewModel, _tray);
             _window.ClosedByUser += OnWindowClosed;
             _window.ExitRequested += OnExitRequested;
+            _showWindowWait = ThreadPool.RegisterWaitForSingleObject(
+                _showWindowEvent,
+                (_, timedOut) =>
+                {
+                    if (!timedOut)
+                    {
+                        dispatcherQueue.TryEnqueue(new DispatcherQueueHandler(() => _window?.ShowFromTray()));
+                    }
+                },
+                null,
+                Timeout.Infinite,
+                executeOnlyOnce: false);
             _window.Activate();
             if (HasArgument(args.Arguments, "--minimized") || HasArgument(args.Arguments, "-m"))
             {
@@ -109,7 +129,7 @@ namespace Desktop
 
         private void OnWindowClosed(object? sender, EventArgs e)
         {
-            _ = ShutdownAsync();
+            _ = ShutdownAndExitAsync();
         }
 
         private void OnExitRequested(object? sender, EventArgs e)
@@ -119,8 +139,27 @@ namespace Desktop
 
         private async Task ShutdownAndCloseAsync()
         {
-            await ShutdownAsync();
-            _window?.CloseForExit();
+            try
+            {
+                await ShutdownAsync();
+                _window?.CloseForExit();
+            }
+            finally
+            {
+                Environment.Exit(0);
+            }
+        }
+
+        private async Task ShutdownAndExitAsync()
+        {
+            try
+            {
+                await ShutdownAsync();
+            }
+            finally
+            {
+                Environment.Exit(0);
+            }
         }
 
         private async Task ShutdownAsync()
@@ -131,27 +170,41 @@ namespace Desktop
             }
 
             _shutdownStarted = true;
-            _viewModel?.CancelPendingOperations();
-            if (_initializationTask is not null && Task.CurrentId != _initializationTask.Id)
+            try
             {
+                _viewModel?.CancelPendingOperations();
+                if (_initializationTask is not null && Task.CurrentId != _initializationTask.Id)
+                {
+                    try
+                    {
+                        await _initializationTask;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+                }
+
+                if (_viewModel is not null)
+                {
+                    await _viewModel.DisposeAsync();
+                }
+            }
+            finally
+            {
+                _tray?.Dispose();
+                _factory?.Dispose();
+                _showWindowWait?.Unregister(null);
+                _showWindowEvent.Dispose();
                 try
                 {
-                    await _initializationTask;
+                    _instanceMutex.ReleaseMutex();
                 }
-                catch (OperationCanceledException)
+                catch (ApplicationException)
                 {
                 }
-            }
 
-            if (_viewModel is not null)
-            {
-                await _viewModel.DisposeAsync();
+                _instanceMutex.Dispose();
             }
-
-            _tray?.Dispose();
-            _factory?.Dispose();
-            _instanceMutex.ReleaseMutex();
-            _instanceMutex.Dispose();
         }
     }
 

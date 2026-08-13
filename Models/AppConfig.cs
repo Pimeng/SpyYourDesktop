@@ -26,6 +26,9 @@ public sealed class AppConfig
     [JsonPropertyName("uploadKey")]
     public string? UploadKey { get; set; }
 
+    [JsonPropertyName("showKey")]
+    public bool ShowKey { get; set; } = true;
+
     [JsonPropertyName("startupMode")]
     [JsonConverter(typeof(JsonStringEnumConverter))]
     public StartupMode? StartupMode { get; set; }
