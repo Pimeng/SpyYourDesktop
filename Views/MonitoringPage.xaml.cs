@@ -29,7 +29,6 @@ public sealed partial class MonitoringPage : Page
         var pageType = tag switch
         {
             "Connection" => typeof(ConnectionPage),
-            "Advanced" => typeof(AdvancedPage),
             "Updates" => typeof(UpdatesPage),
             _ => typeof(OverviewPage)
         };

@@ -7,14 +7,13 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <Grid MaxWidth="1040" Padding="32,28,32,40">
+        <Grid MaxWidth="1040" Padding="32,28,32,40" RowSpacing="12">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
-            <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,22">
-                <TextBlock Text="配置" Style="{StaticResource PageTitleStyle}" />
-            </StackPanel>
 
             <Border Grid.Row="1"
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
@@ -22,46 +21,109 @@
                     BorderThickness="1"
                     CornerRadius="12"
                     Padding="26">
-                <Grid RowSpacing="16" ColumnSpacing="18">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="150" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="服务器地址" Style="{StaticResource FieldLabelStyle}" />
-                    <TextBox Grid.Row="0" Grid.Column="1"
-                             Text="{Binding ServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             PlaceholderText="https://example.com/api/ingest"
-                             IsEnabled="{Binding CanEditSettings}" />
-                    <TextBlock Grid.Row="1" Text="设备 ID" Style="{StaticResource FieldLabelStyle}" />
-                    <TextBox Grid.Row="1" Grid.Column="1"
-                             Text="{Binding MachineId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             PlaceholderText="例如：anyi-desktop"
-                             IsEnabled="{Binding CanEditSettings}" />
-                    <TextBlock Grid.Row="2" Text="上传密钥" Style="{StaticResource FieldLabelStyle}" />
-                    <Grid Grid.Row="2" Grid.Column="1" ColumnSpacing="8">
+                <StackPanel Spacing="18">
+                    <TextBlock Text="连接配置" Style="{StaticResource SectionTitleStyle}" />
+                    <Grid RowSpacing="16" ColumnSpacing="18">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="服务器地址" Style="{StaticResource FieldLabelStyle}" />
+                        <TextBox Grid.Row="0" Grid.Column="1"
+                                 Text="{Binding ServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="https://example.com/api/ingest"
+                                 IsEnabled="{Binding CanEditSettings}" />
+                        <TextBlock Grid.Row="1" Text="设备 ID" Style="{StaticResource FieldLabelStyle}" />
+                        <TextBox Grid.Row="1" Grid.Column="1"
+                                 Text="{Binding MachineId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                 PlaceholderText="例如：anyi-desktop"
+                                 IsEnabled="{Binding CanEditSettings}" />
+                        <TextBlock Grid.Row="2" Text="上传密钥" Style="{StaticResource FieldLabelStyle}" />
+                        <Grid Grid.Row="2" Grid.Column="1" ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <PasswordBox x:Name="UploadKeyBox"
+                                         PasswordChanged="UploadKeyBox_PasswordChanged"
+                                         IsEnabled="{Binding CanEditSettings}"
+                                         PlaceholderText="个人密钥或令牌" />
+                            <CheckBox x:Name="ShowKeyCheckBox"
+                                      Grid.Column="1"
+                                      Content="显示"
+                                      IsChecked="{Binding ShowKey, Mode=TwoWay}"
+                                      Checked="ShowKeyCheckBox_Checked"
+                                      Unchecked="ShowKeyCheckBox_Unchecked"
+                                      VerticalAlignment="Center"
+                                      IsEnabled="{Binding CanEditSettings}" />
+                        </Grid>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="2"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="26">
+                <StackPanel Spacing="18">
+                    <TextBlock Text="频率" Style="{StaticResource SectionTitleStyle}" />
+                    <Grid ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <PasswordBox x:Name="UploadKeyBox"
-                                     PasswordChanged="UploadKeyBox_PasswordChanged"
-                                     IsEnabled="{Binding CanEditSettings}"
-                                     PlaceholderText="个人密钥或令牌" />
-                        <CheckBox x:Name="ShowKeyCheckBox"
-                                  Grid.Column="1"
-                                  Content="显示"
-                                  IsChecked="{Binding ShowKey, Mode=TwoWay}"
-                                  Checked="ShowKeyCheckBox_Checked"
-                                  Unchecked="ShowKeyCheckBox_Unchecked"
-                                  VerticalAlignment="Center"
-                                  IsEnabled="{Binding CanEditSettings}" />
+                        <NumberBox Header="采集间隔（秒）"
+                                   Value="{Binding IntervalSeconds, Mode=TwoWay}"
+                                   Minimum="5"
+                                   Maximum="3600"
+                                   HorizontalAlignment="Stretch"
+                                   IsEnabled="{Binding CanEditSettings}" />
+                        <NumberBox Header="心跳（秒）"
+                                   Grid.Column="1"
+                                   Value="{Binding HeartbeatSeconds, Mode=TwoWay}"
+                                   Minimum="10"
+                                   Maximum="3600"
+                                   HorizontalAlignment="Stretch"
+                                   IsEnabled="{Binding CanEditSettings}" />
                     </Grid>
-                </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Grid.Row="3"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="26">
+                <StackPanel Spacing="14">
+                    <TextBlock Text="运行方式" Style="{StaticResource SectionTitleStyle}" />
+                    <ToggleSwitch Header="开机自启动"
+                                  OnContent="自启动"
+                                  OffContent="禁用自启动"
+                                  IsOn="{Binding AutoStart, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanEditSettings}" />
+                    <ToggleSwitch Header="关闭窗口行为"
+                                  OnContent="最小化"
+                                  OffContent="退出"
+                                  IsOn="{Binding AllowBackground, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanEditSettings}" />
+                    <ToggleSwitch Header="隐私模式"
+                                  OnContent="开（不上报任何内容）"
+                                  OffContent="关（正常上报）"
+                                  IsOn="{Binding PrivacyMode, Mode=TwoWay}" />
+                    <ToggleSwitch Header="是否上报过长标题"
+                                  OnContent="不截断"
+                                  OffContent="截断至 140 字符"
+                                  IsOn="{Binding ForceAllowLongTitle, Mode=TwoWay}"
+                                  IsEnabled="{Binding CanEditSettings}" />
+                </StackPanel>
             </Border>
         </Grid>
     </ScrollViewer>
