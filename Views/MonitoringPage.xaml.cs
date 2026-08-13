@@ -1,6 +1,5 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Desktop.ViewModels;
 
 namespace Desktop.Views;
 
@@ -41,19 +40,4 @@ public sealed partial class MonitoringPage : Page
         }
     }
 
-    private void UpdateActions_DismissRequested(object sender, EventArgs args)
-    {
-        if (DataContext is MainViewModel viewModel)
-        {
-            viewModel.DismissNoticeCommand.Execute(null);
-        }
-    }
-
-    private void UpdateActions_SkipRequested(object sender, EventArgs args)
-    {
-        if (DataContext is MainViewModel viewModel)
-        {
-            viewModel.SkipUpdateCommand.Execute(null);
-        }
-    }
 }

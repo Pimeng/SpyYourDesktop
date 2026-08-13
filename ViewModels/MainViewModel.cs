@@ -26,6 +26,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private Task? _privacyTask;
     private Task? _startupTask;
     private Task? _updateCheckTask;
+    private bool _hasCheckedForUpdates;
     private CancellationTokenSource? _configurationSaveCancellation;
     private Task? _configurationSaveTask;
 
@@ -81,7 +82,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         CheckForUpdatesCommand = new AsyncCommand(() => StartUpdateCheckAsync(manual: true), () => !IsBusy);
         ApplyUpdateCommand = new AsyncCommand(ApplyUpdateAsync, () => AvailableUpdate is not null && !IsBusy);
         SkipUpdateCommand = new AsyncCommand(SkipUpdateAsync, () => AvailableUpdate is not null && !IsBusy);
-        DismissNoticeCommand = new RelayCommand(DismissNotice);
         OpenReleaseCommand = new RelayCommand(OpenReleasePage, () => AvailableUpdate is not null);
         OpenLogCommand = new RelayCommand(OpenLogFile);
 
@@ -101,7 +101,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public ICommand CheckForUpdatesCommand { get; }
     public ICommand ApplyUpdateCommand { get; }
     public ICommand SkipUpdateCommand { get; }
-    public ICommand DismissNoticeCommand { get; }
     public ICommand OpenReleaseCommand { get; }
     public ICommand OpenLogCommand { get; }
 
@@ -278,10 +277,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         get => _isNoticeVisible;
         private set
         {
-            if (SetProperty(ref _isNoticeVisible, value))
-            {
-                OnPropertyChanged(nameof(AreUpdateActionsVisible));
-            }
+            SetProperty(ref _isNoticeVisible, value);
         }
     }
 
@@ -302,7 +298,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             }
 
             OnPropertyChanged(nameof(HasAvailableUpdate));
-            OnPropertyChanged(nameof(AreUpdateActionsVisible));
             OnPropertyChanged(nameof(UpdateTag));
             OnPropertyChanged(nameof(UpdateNotes));
             OnPropertyChanged(nameof(CanApplyInPlace));
@@ -312,7 +307,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     }
 
     public bool HasAvailableUpdate => AvailableUpdate is not null;
-    public bool AreUpdateActionsVisible => IsNoticeVisible && HasAvailableUpdate;
     public string UpdateTag => AvailableUpdate?.Tag ?? string.Empty;
     public string UpdateNotes => AvailableUpdate?.Notes ?? string.Empty;
     public bool CanApplyInPlace => _updateService.CanApplyInPlace;
@@ -385,7 +379,19 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             await StartMonitoringAsync(showValidation: false);
         }
 
-        _updateCheckTask = StartUpdateCheckAsync(manual: false);
+        _updateCheckTask = EnsureUpdateCheckAsync();
+    }
+
+    public Task EnsureUpdateCheckAsync()
+    {
+        if (!_isInitialized || _hasCheckedForUpdates)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _updateCheckTask is { IsCompleted: false }
+            ? _updateCheckTask
+            : StartUpdateCheckAsync(manual: false);
     }
 
     private Task StartUpdateCheckAsync(bool manual)
@@ -455,11 +461,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private async Task CheckForUpdatesAsync(bool manual)
     {
+        UpdateStatus = "正在检查更新...";
         if (manual)
         {
             IsBusy = true;
             ClearMessages();
-            UpdateStatus = "正在检查更新...";
         }
 
         try
@@ -467,16 +473,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             var release = await _updateService.CheckLatestAsync(_applicationCancellation.Token);
             if (release is null)
             {
-                if (manual)
-                {
-                    ShowNotice("没有获取到最新版本信息。");
-                }
+                UpdateStatus = "没有获取到最新版本信息。";
 
                 return;
             }
 
             if (!manual && string.Equals(_skippedVersion, release.Tag, StringComparison.OrdinalIgnoreCase))
             {
+                UpdateStatus = $"已跳过版本 {release.Tag}。";
                 return;
             }
 
@@ -484,11 +488,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             {
                 AvailableUpdate = release;
                 UpdateStatus = $"发现新版本 {release.Tag}";
-                ShowNotice($"发现 SpyYourDesktop 新版本 {release.Tag}。");
             }
-            else if (manual)
+            else
             {
-                ShowNotice($"当前已是最新版本（{_updateService.CurrentVersion}）。");
+                UpdateStatus = $"当前已是最新版本（{_updateService.CurrentVersion}）。";
             }
         }
         catch (OperationCanceledException) when (_applicationCancellation.IsCancellationRequested)
@@ -497,6 +500,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         catch (Exception exception)
         {
             await _logger.LogAsync($"[update-check] {exception.Message}");
+            UpdateStatus = "检查更新失败。";
             if (manual)
             {
                 ShowError($"检查更新失败：{exception.Message}");
@@ -504,6 +508,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
         finally
         {
+            _hasCheckedForUpdates = true;
             if (manual)
             {
                 IsBusy = false;
@@ -543,7 +548,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             else
             {
                 UpdateStatus = "当前安装由系统管理，已打开 GitHub 发布页。";
-                ShowNotice(UpdateStatus);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -574,7 +578,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             await SaveConfigurationAsync();
             AvailableUpdate = null;
             UpdateStatus = "已跳过此版本。";
-            DismissNotice();
         }
         catch (Exception exception)
         {
@@ -586,8 +589,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             IsBusy = false;
         }
     }
-
-    private void DismissNotice() => IsNoticeVisible = false;
 
     private void OpenReleasePage()
     {
