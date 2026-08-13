@@ -36,7 +36,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private string _machineId = string.Empty;
     private string _uploadKey = string.Empty;
     private bool _showKey = true;
-    private bool _autoStart;
+    private StartupMode _startupMode = StartupMode.Disabled;
     private bool _allowBackground;
     private bool _privacyMode;
     private bool _forceAllowLongTitle;
@@ -140,17 +140,29 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         set => SetProperty(ref _showKey, value);
     }
 
-    public bool AutoStart
+    public int StartupModeIndex
     {
-        get => _autoStart;
+        get => (int)_startupMode;
         set
         {
-            if (!SetProperty(ref _autoStart, value) || !_isInitialized)
+            var mode = value switch
+            {
+                (int)StartupMode.Silent => StartupMode.Silent,
+                (int)StartupMode.Visible => StartupMode.Visible,
+                _ => StartupMode.Disabled
+            };
+            if (_startupMode == mode)
             {
                 return;
             }
 
-            _startupTask = UpdateStartupAsync(value);
+            var previousMode = _startupMode;
+            _startupMode = mode;
+            OnPropertyChanged();
+            if (_isInitialized)
+            {
+                _startupTask = UpdateStartupAsync(mode, previousMode);
+            }
         }
     }
 
@@ -340,6 +352,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _heartbeatSeconds = Math.Clamp(config.HeartbeatSeconds <= 0 ? MinimumHeartbeatSeconds : config.HeartbeatSeconds, MinimumHeartbeatSeconds, 3600);
         _machineId = config.MachineId?.Trim() ?? string.Empty;
         _uploadKey = config.UploadKey ?? string.Empty;
+        _startupMode = config.StartupMode ?? (config.AutoStartLegacy == true ? StartupMode.Visible : StartupMode.Disabled);
         _allowBackground = config.AllowBackground;
         _forceAllowLongTitle = config.ForceAllowLongTitle;
         _skippedVersion = config.SkippedVersion;
@@ -348,16 +361,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         RaiseAllSettingsChanged();
         _isInitialized = true;
 
-        var startupEnabled = await Task.Run(_startupService.IsEnabled, cancellationToken);
-        if (startupEnabled)
+        var registeredStartupMode = await Task.Run(_startupService.GetMode, cancellationToken);
+        if (registeredStartupMode is not StartupMode.Disabled)
         {
-            _autoStart = true;
-            OnPropertyChanged(nameof(AutoStart));
-        }
-        else
-        {
-            _autoStart = config.AutoStart;
-            OnPropertyChanged(nameof(AutoStart));
+            _startupMode = registeredStartupMode;
+            OnPropertyChanged(nameof(StartupModeIndex));
         }
 
         await _logger.LogAsync("=== AppUsageMonitor started ===", cancellationToken);
@@ -621,11 +629,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
-    private async Task UpdateStartupAsync(bool enabled)
+    private async Task UpdateStartupAsync(StartupMode mode, StartupMode previousMode)
     {
         try
         {
-            await Task.Run(() => _startupService.SetEnabled(enabled), _applicationCancellation.Token);
+            await Task.Run(() => _startupService.SetMode(mode), _applicationCancellation.Token);
         }
         catch (OperationCanceledException) when (_applicationCancellation.IsCancellationRequested)
         {
@@ -635,8 +643,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             await _logger.LogAsync($"[startup] {exception.Message}");
             RunOnUi(() =>
             {
-                _autoStart = !enabled;
-                OnPropertyChanged(nameof(AutoStart));
+                _startupMode = previousMode;
+                OnPropertyChanged(nameof(StartupModeIndex));
                 ShowError("设置开机自启动失败，可能没有权限。");
             });
         }
@@ -714,7 +722,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             HeartbeatSeconds = Math.Clamp(HeartbeatSeconds, MinimumHeartbeatSeconds, 3600),
             MachineId = MachineId.Trim(),
             UploadKey = UploadKey,
-            AutoStart = AutoStart,
+            StartupMode = _startupMode,
             AllowBackground = AllowBackground,
             SkippedVersion = _skippedVersion,
             ForceAllowLongTitle = ForceAllowLongTitle
@@ -827,6 +835,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         OnPropertyChanged(nameof(HeartbeatSeconds));
         OnPropertyChanged(nameof(MachineId));
         OnPropertyChanged(nameof(UploadKey));
+        OnPropertyChanged(nameof(StartupModeIndex));
         OnPropertyChanged(nameof(AllowBackground));
         OnPropertyChanged(nameof(PrivacyMode));
         OnPropertyChanged(nameof(ForceAllowLongTitle));
@@ -882,7 +891,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             nameof(HeartbeatSeconds) or
             nameof(MachineId) or
             nameof(UploadKey) or
-            nameof(AutoStart) or
+            nameof(StartupModeIndex) or
             nameof(AllowBackground) or
             nameof(ForceAllowLongTitle))
         {

@@ -70,7 +70,7 @@ namespace Desktop
             _window.ClosedByUser += OnWindowClosed;
             _window.ExitRequested += OnExitRequested;
             _window.Activate();
-            if (HasMinimizedArgument(args.Arguments))
+            if (HasArgument(args.Arguments, "--minimized") || HasArgument(args.Arguments, "-m"))
             {
                 _window.HideToTray();
             }
@@ -88,6 +88,10 @@ namespace Desktop
             try
             {
                 await _viewModel.InitializeAsync(commandLine, cancellationToken);
+                if (HasArgument(commandLine, "--startup") && _viewModel.IsRunning)
+                {
+                    _tray?.ShowNotification("SpyYourDesktop 启动成功并开始监视窗口");
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -98,11 +102,10 @@ namespace Desktop
             }
         }
 
-        private static bool HasMinimizedArgument(string commandLine) =>
+        private static bool HasArgument(string commandLine, string expectedArgument) =>
             commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Any(argument =>
-                    string.Equals(argument, "--minimized", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(argument, "-m", StringComparison.OrdinalIgnoreCase));
+                    string.Equals(argument, expectedArgument, StringComparison.OrdinalIgnoreCase));
 
         private void OnWindowClosed(object? sender, EventArgs e)
         {

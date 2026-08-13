@@ -1,45 +1,49 @@
 using Microsoft.Win32;
+using Desktop.Models;
 
 namespace Desktop.Infrastructure;
 
 public interface IStartupService
 {
-    bool IsEnabled();
-    void SetEnabled(bool enabled);
+    StartupMode GetMode();
+    void SetMode(StartupMode mode);
 }
 
 public sealed class StartupService : IStartupService
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
-    public bool IsEnabled()
+    public StartupMode GetMode()
     {
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKey, false);
             var current = key?.GetValue(AppPaths.DisplayName);
             var legacy = key?.GetValue(GetLegacyValueName());
-            return IsMatchingCommand(current) || IsMatchingCommand(legacy);
+            return GetModeFromCommand(current) ?? GetModeFromCommand(legacy) ?? StartupMode.Disabled;
         }
         catch (System.Security.SecurityException)
         {
-            return false;
+            return StartupMode.Disabled;
         }
         catch (UnauthorizedAccessException)
         {
-            return false;
+            return StartupMode.Disabled;
         }
     }
 
-    public void SetEnabled(bool enabled)
+    public void SetMode(StartupMode mode)
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKey, true)
             ?? Registry.CurrentUser.CreateSubKey(RunKey, true)
             ?? throw new InvalidOperationException("Unable to open the Windows startup registry key.");
 
-        if (enabled)
+        if (mode is not StartupMode.Disabled)
         {
-            key.SetValue(AppPaths.DisplayName, $"\"{GetExecutablePath()}\"");
+            var arguments = mode is StartupMode.Silent
+                ? " --startup --minimized"
+                : " --startup";
+            key.SetValue(AppPaths.DisplayName, $"\"{GetExecutablePath()}\"{arguments}");
             var legacyName = GetLegacyValueName();
             if (!string.Equals(legacyName, AppPaths.DisplayName, StringComparison.OrdinalIgnoreCase))
             {
@@ -53,8 +57,17 @@ public sealed class StartupService : IStartupService
         }
     }
 
-    private static bool IsMatchingCommand(object? value) =>
-        value is string command && command.Contains(GetExecutablePath(), StringComparison.OrdinalIgnoreCase);
+    private static StartupMode? GetModeFromCommand(object? value)
+    {
+        if (value is not string command || !command.Contains(GetExecutablePath(), StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return command.Contains("--minimized", StringComparison.OrdinalIgnoreCase)
+            ? StartupMode.Silent
+            : StartupMode.Visible;
+    }
 
     private static string GetLegacyValueName() =>
         Path.GetFileNameWithoutExtension(GetExecutablePath());

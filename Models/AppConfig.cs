@@ -2,6 +2,13 @@ using System.Text.Json.Serialization;
 
 namespace Desktop.Models;
 
+public enum StartupMode
+{
+    Disabled,
+    Silent,
+    Visible
+}
+
 public sealed class AppConfig
 {
     [JsonPropertyName("serverUrl")]
@@ -19,8 +26,13 @@ public sealed class AppConfig
     [JsonPropertyName("uploadKey")]
     public string? UploadKey { get; set; }
 
+    [JsonPropertyName("startupMode")]
+    [JsonConverter(typeof(JsonStringEnumConverter))]
+    public StartupMode? StartupMode { get; set; }
+
     [JsonPropertyName("autoStart")]
-    public bool AutoStart { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public bool? AutoStartLegacy { get; set; }
 
     [JsonPropertyName("allowBackground")]
     public bool AllowBackground { get; set; }

@@ -11,6 +11,8 @@ public sealed class TrayService : IDisposable
     private const uint NotifyMessage = 0x00000001;
     private const uint NotifyIcon = 0x00000002;
     private const uint NotifyTip = 0x00000004;
+    private const uint NotifyInfo = 0x00000010;
+    private const uint InfoIcon = 0x00000001;
     private const uint CallbackMessage = 0x8001;
     private const uint SizeMessage = 0x0005;
     private const uint SizeMinimized = 1;
@@ -111,6 +113,27 @@ public sealed class TrayService : IDisposable
         var data = CreateNotifyData();
         Shell_NotifyIcon(NotifyDelete, ref data);
         _isVisible = false;
+    }
+
+    public void ShowNotification(string message)
+    {
+        if (_disposed || _windowHandle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (!_isVisible)
+        {
+            Show(isRunning: true);
+        }
+
+        var data = CreateNotifyData();
+        data.uFlags = NotifyInfo;
+        data.szInfo = message;
+        data.szInfoTitle = AppPaths.DisplayName;
+        data.dwInfoFlags = InfoIcon;
+        data.uTimeoutOrVersion = 5000;
+        Shell_NotifyIcon(NotifyModify, ref data);
     }
 
     public void Dispose()

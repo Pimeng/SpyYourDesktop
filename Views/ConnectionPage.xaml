@@ -104,11 +104,14 @@
                     Padding="26">
                 <StackPanel Spacing="14">
                     <TextBlock Text="运行方式" Style="{StaticResource SectionTitleStyle}" />
-                    <ToggleSwitch Header="开机自启动"
-                                  OnContent="自启动"
-                                  OffContent="禁用自启动"
-                                  IsOn="{Binding AutoStart, Mode=TwoWay}"
-                                  IsEnabled="{Binding CanEditSettings}" />
+                    <ComboBox Header="开机自启动"
+                              SelectedIndex="{Binding StartupModeIndex, Mode=TwoWay}"
+                              IsEnabled="{Binding CanEditSettings}"
+                              HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="禁用自启动" />
+                        <ComboBoxItem Content="开机静默自启动并启动监控" />
+                        <ComboBoxItem Content="开机显示窗口并启动监控" />
+                    </ComboBox>
                     <ToggleSwitch Header="关闭窗口行为"
                                   OnContent="最小化"
                                   OffContent="退出"
