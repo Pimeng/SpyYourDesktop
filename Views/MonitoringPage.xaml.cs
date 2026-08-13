@@ -1,5 +1,3 @@
-using System.ComponentModel;
-using Desktop.ViewModels;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -7,65 +5,38 @@ namespace Desktop.Views;
 
 public sealed partial class MonitoringPage : Page
 {
-    private MainViewModel? _viewModel;
-
     public MonitoringPage()
     {
         InitializeComponent();
         Loaded += OnLoaded;
-        Unloaded += OnUnloaded;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs args)
     {
-        _viewModel = DataContext as MainViewModel;
-        if (_viewModel is null)
+        if (RootNavigation.SelectedItem is null)
+        {
+            RootNavigation.SelectedItem = RootNavigation.MenuItems[0];
+        }
+    }
+
+    private void RootNavigation_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        if (args.SelectedItem is not NavigationViewItem item || item.Tag is not string tag)
         {
             return;
         }
 
-        UploadKeyBox.Password = _viewModel.UploadKey;
-        SetPasswordRevealMode(_viewModel.ShowKey);
-        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
-    }
-
-    private void OnUnloaded(object sender, RoutedEventArgs args)
-    {
-        if (_viewModel is not null)
+        var pageType = tag switch
         {
-            _viewModel.PropertyChanged -= OnViewModelPropertyChanged;
-        }
-    }
+            "Connection" => typeof(ConnectionPage),
+            "Strategy" => typeof(StrategyPage),
+            "Updates" => typeof(UpdatesPage),
+            _ => typeof(OverviewPage)
+        };
 
-    private void UploadKeyBox_PasswordChanged(object sender, RoutedEventArgs args)
-    {
-        if (_viewModel is not null && _viewModel.UploadKey != UploadKeyBox.Password)
+        if (ContentFrame.CurrentSourcePageType != pageType)
         {
-            _viewModel.UploadKey = UploadKeyBox.Password;
+            ContentFrame.Navigate(pageType, DataContext);
         }
-    }
-
-    private void ShowKeyCheckBox_Checked(object sender, RoutedEventArgs args) => SetPasswordRevealMode(true);
-
-    private void ShowKeyCheckBox_Unchecked(object sender, RoutedEventArgs args) => SetPasswordRevealMode(false);
-
-    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs args)
-    {
-        if (args.PropertyName == nameof(MainViewModel.UploadKey) && UploadKeyBox.Password != _viewModel?.UploadKey)
-        {
-            UploadKeyBox.Password = _viewModel?.UploadKey ?? string.Empty;
-        }
-
-        if (args.PropertyName == nameof(MainViewModel.ShowKey) && _viewModel is not null)
-        {
-            SetPasswordRevealMode(_viewModel.ShowKey);
-        }
-    }
-
-    private void SetPasswordRevealMode(bool visible)
-    {
-        UploadKeyBox.PasswordRevealMode = visible
-            ? PasswordRevealMode.Visible
-            : PasswordRevealMode.Hidden;
     }
 }

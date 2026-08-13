@@ -3,7 +3,8 @@
     x:Class="Desktop.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:local="using:Desktop">
+    xmlns:local="using:Desktop"
+    xmlns:converters="using:Desktop.Converters">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -19,6 +20,7 @@
                     <SolidColorBrush x:Key="BrandSubtleBrush" Color="#29365F" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
+            <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
             <Style x:Key="PageTitleStyle" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="30" />
                 <Setter Property="FontWeight" Value="SemiBold" />

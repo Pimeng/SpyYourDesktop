@@ -3,222 +3,60 @@
     x:Class="Desktop.Views.MonitoringPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:converters="using:Desktop.Converters"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
-    <Page.Resources>
-        <converters:BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
-    </Page.Resources>
-    <ScrollViewer HorizontalScrollBarVisibility="Disabled"
-                  VerticalScrollBarVisibility="Auto">
-        <Grid MaxWidth="1080" Padding="32,28,32,40" RowSpacing="20">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+    <NavigationView x:Name="RootNavigation"
+                    PaneDisplayMode="Left"
+                    IsBackButtonVisible="Collapsed"
+                    IsSettingsVisible="False"
+                    IsPaneToggleButtonVisible="True"
+                    OpenPaneLength="248"
+                    CompactPaneLength="52"
+                    PaneTitle="SpyYourDesktop"
+                    SelectionChanged="RootNavigation_SelectionChanged">
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="概览" Tag="Overview">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Home" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="连接与身份" Tag="Connection">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Globe" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="采集策略" Tag="Strategy">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Edit" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+            <NavigationViewItem Content="更新与日志" Tag="Updates">
+                <NavigationViewItem.Icon>
+                    <SymbolIcon Symbol="Download" />
+                </NavigationViewItem.Icon>
+            </NavigationViewItem>
+        </NavigationView.MenuItems>
 
-            <Grid Grid.Row="0" ColumnSpacing="24">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <StackPanel Spacing="6">
-                    <TextBlock Text="SpyYourDesktop" Style="{StaticResource PageTitleStyle}" />
-                    <TextBlock Text="轻量、可控的桌面活动上报工具"
-                               Opacity="0.7"
-                               FontSize="15" />
-                </StackPanel>
-                <Border Grid.Column="1"
-                        Background="{ThemeResource BrandSubtleBrush}"
-                        CornerRadius="18"
-                        Padding="16,9"
-                        VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="8">
-                        <Ellipse Width="8" Height="8" Fill="{ThemeResource BrandBrush}" VerticalAlignment="Center" />
-                        <TextBlock Text="{Binding StatusText}" Foreground="{ThemeResource BrandBrush}" FontWeight="SemiBold" />
-                    </StackPanel>
-                </Border>
+        <NavigationView.Content>
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <InfoBar Grid.Row="0"
+                         Margin="24,18,24,0"
+                         IsOpen="{Binding IsErrorVisible}"
+                         Severity="Error"
+                         Message="{Binding ErrorMessage}" />
+                <InfoBar Grid.Row="1"
+                         Margin="24,10,24,0"
+                         IsOpen="{Binding IsNoticeVisible}"
+                         Severity="Informational"
+                         Message="{Binding NoticeMessage}" />
+                <Frame x:Name="ContentFrame" Grid.Row="2" IsNavigationStackEnabled="False" />
             </Grid>
-
-            <InfoBar Grid.Row="1"
-                     IsOpen="{Binding IsErrorVisible}"
-                     Severity="Error"
-                     Message="{Binding ErrorMessage}" />
-            <InfoBar Grid.Row="1"
-                     IsOpen="{Binding IsNoticeVisible}"
-                     Severity="Informational"
-                     Message="{Binding NoticeMessage}" />
-
-            <Border Grid.Row="2"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="12"
-                    Padding="24">
-                <StackPanel Spacing="18">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="连接与身份" Style="{StaticResource SectionTitleStyle}" />
-                        <TextBlock Text="设置数据发送到哪里，以及这台设备如何被识别。"
-                                   Opacity="0.68" />
-                    </StackPanel>
-
-                    <Grid RowSpacing="12" ColumnSpacing="16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="150" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="服务器地址" Style="{StaticResource FieldLabelStyle}" />
-                        <TextBox Grid.Row="0" Grid.Column="1"
-                                 Text="{Binding ServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="https://example.com/api/ingest"
-                                 IsEnabled="{Binding CanEditSettings}" />
-                        <TextBlock Grid.Row="1" Text="设备 ID" Style="{StaticResource FieldLabelStyle}" />
-                        <TextBox Grid.Row="1" Grid.Column="1"
-                                 Text="{Binding MachineId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                 PlaceholderText="例如：anyi-desktop"
-                                 IsEnabled="{Binding CanEditSettings}" />
-                        <TextBlock Grid.Row="2" Text="上传密钥" Style="{StaticResource FieldLabelStyle}" />
-                        <Grid Grid.Row="2" Grid.Column="1" ColumnSpacing="8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <PasswordBox x:Name="UploadKeyBox"
-                                         PasswordChanged="UploadKeyBox_PasswordChanged"
-                                         IsEnabled="{Binding CanEditSettings}"
-                                         PlaceholderText="个人密钥或令牌" />
-                            <CheckBox x:Name="ShowKeyCheckBox"
-                                      Grid.Column="1"
-                                      Content="显示"
-                                      IsChecked="{Binding ShowKey, Mode=TwoWay}"
-                                      Checked="ShowKeyCheckBox_Checked"
-                                      Unchecked="ShowKeyCheckBox_Unchecked"
-                                      VerticalAlignment="Center"
-                                      IsEnabled="{Binding CanEditSettings}" />
-                        </Grid>
-                        <TextBlock Grid.Row="3" Text="采样节奏" Style="{StaticResource FieldLabelStyle}" />
-                        <StackPanel Grid.Row="3" Grid.Column="1" Spacing="10">
-                            <NumberBox Header="间隔（秒）"
-                                       Value="{Binding IntervalSeconds, Mode=TwoWay}"
-                                       Minimum="5"
-                                       Maximum="3600"
-                                       Width="170"
-                                       IsEnabled="{Binding CanEditSettings}" />
-                            <NumberBox Header="心跳（秒）"
-                                       Value="{Binding HeartbeatSeconds, Mode=TwoWay}"
-                                       Minimum="10"
-                                       Maximum="3600"
-                                       Width="170"
-                                       IsEnabled="{Binding CanEditSettings}" />
-                        </StackPanel>
-                    </Grid>
-                </StackPanel>
-            </Border>
-
-            <Border Grid.Row="3"
-                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1"
-                    CornerRadius="12"
-                    Padding="24">
-                <StackPanel Spacing="16">
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="采集策略" Style="{StaticResource SectionTitleStyle}" />
-                        <TextBlock Text="监控运行时连接设置会锁定，隐私模式仍可即时切换。"
-                                   Opacity="0.68" />
-                    </StackPanel>
-                    <StackPanel Spacing="12">
-                        <ToggleSwitch Header="开机自启动"
-                                      IsOn="{Binding AutoStart, Mode=TwoWay}"
-                                      IsEnabled="{Binding CanEditSettings}" />
-                        <ToggleSwitch Header="允许后台运行"
-                                      IsOn="{Binding AllowBackground, Mode=TwoWay}"
-                                      IsEnabled="{Binding CanEditSettings}" />
-                        <ToggleSwitch Header="隐私模式"
-                                      OnContent="不采集标题/应用"
-                                      OffContent="采集标题/应用"
-                                      IsOn="{Binding PrivacyMode, Mode=TwoWay}" />
-                        <ToggleSwitch Header="允许长标题"
-                                      OnContent="不截断"
-                                      OffContent="截断至 140 字符"
-                                      IsOn="{Binding ForceAllowLongTitle, Mode=TwoWay}"
-                                      IsEnabled="{Binding CanEditSettings}" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
-
-            <Grid Grid.Row="4" ColumnSpacing="20">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="1.25*" />
-                    <ColumnDefinition Width="0.75*" />
-                </Grid.ColumnDefinitions>
-                <Border Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="12"
-                        Padding="24">
-                    <StackPanel Spacing="18">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="监控状态" Style="{StaticResource SectionTitleStyle}" />
-                            <TextBlock Text="最近一次成功上报的内容。" Opacity="0.68" />
-                        </StackPanel>
-                        <Grid RowSpacing="10" ColumnSpacing="16">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="130" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Text="最后上报" Style="{StaticResource FieldLabelStyle}" />
-                            <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding LastSentAt}" TextWrapping="Wrap" />
-                            <TextBlock Grid.Row="1" Text="应用" Style="{StaticResource FieldLabelStyle}" />
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LastApplication}" TextWrapping="Wrap" />
-                            <TextBlock Grid.Row="2" Text="窗口标题" Style="{StaticResource FieldLabelStyle}" />
-                            <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LastTitle}" TextWrapping="Wrap" MaxLines="3" />
-                        </Grid>
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <Button Content="开始监控" Command="{Binding StartCommand}" Style="{StaticResource AccentButtonStyle}" />
-                            <Button Content="停止监控" Command="{Binding StopCommand}" />
-                            <Button Content="打开日志" Command="{Binding OpenLogCommand}" />
-                        </StackPanel>
-                    </StackPanel>
-                </Border>
-
-                <Border Grid.Column="1"
-                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-                        BorderThickness="1"
-                        CornerRadius="12"
-                        Padding="24">
-                    <StackPanel Spacing="12">
-                        <TextBlock Text="应用更新" Style="{StaticResource SectionTitleStyle}" />
-                        <TextBlock Text="{Binding UpdateStatus}" TextWrapping="Wrap" Opacity="0.72" />
-                        <ProgressBar Value="{Binding UpdateProgressPercent}" Maximum="100" />
-                        <StackPanel Visibility="{Binding HasAvailableUpdate, Converter={StaticResource BooleanToVisibilityConverter}}" Spacing="8">
-                            <TextBlock Text="{Binding UpdateTag}" FontWeight="SemiBold" />
-                            <TextBlock Text="{Binding UpdateNotes}" MaxLines="5" TextWrapping="Wrap" Opacity="0.72" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="{Binding UpdateActionText}" Command="{Binding ApplyUpdateCommand}" Style="{StaticResource AccentButtonStyle}" />
-                                <Button Content="稍后" Command="{Binding SkipUpdateCommand}" />
-                            </StackPanel>
-                        </StackPanel>
-                        <Button Content="检查更新" Command="{Binding CheckForUpdatesCommand}" HorizontalAlignment="Left" />
-                    </StackPanel>
-                </Border>
-            </Grid>
-        </Grid>
-    </ScrollViewer>
+        </NavigationView.Content>
+    </NavigationView>
 </Page>

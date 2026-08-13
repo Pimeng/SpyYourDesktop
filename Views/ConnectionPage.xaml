@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="Desktop.Views.ConnectionPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Grid MaxWidth="1040" Padding="32,28,32,40">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <StackPanel Grid.Row="0" Spacing="6" Margin="0,0,0,22">
+                <TextBlock Text="连接与身份" Style="{StaticResource PageTitleStyle}" />
+                <TextBlock Text="设置数据发送到哪里，以及这台设备如何被识别。"
+                           FontSize="15"
+                           Opacity="0.7" />
+            </StackPanel>
+
+            <Border Grid.Row="1"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="26">
+                <Grid RowSpacing="16" ColumnSpacing="18">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Text="服务器地址" Style="{StaticResource FieldLabelStyle}" />
+                    <TextBox Grid.Row="0" Grid.Column="1"
+                             Text="{Binding ServerUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             PlaceholderText="https://example.com/api/ingest"
+                             IsEnabled="{Binding CanEditSettings}" />
+                    <TextBlock Grid.Row="1" Text="设备 ID" Style="{StaticResource FieldLabelStyle}" />
+                    <TextBox Grid.Row="1" Grid.Column="1"
+                             Text="{Binding MachineId, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             PlaceholderText="例如：anyi-desktop"
+                             IsEnabled="{Binding CanEditSettings}" />
+                    <TextBlock Grid.Row="2" Text="上传密钥" Style="{StaticResource FieldLabelStyle}" />
+                    <Grid Grid.Row="2" Grid.Column="1" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <PasswordBox x:Name="UploadKeyBox"
+                                     PasswordChanged="UploadKeyBox_PasswordChanged"
+                                     IsEnabled="{Binding CanEditSettings}"
+                                     PlaceholderText="个人密钥或令牌" />
+                        <CheckBox x:Name="ShowKeyCheckBox"
+                                  Grid.Column="1"
+                                  Content="显示"
+                                  IsChecked="{Binding ShowKey, Mode=TwoWay}"
+                                  Checked="ShowKeyCheckBox_Checked"
+                                  Unchecked="ShowKeyCheckBox_Unchecked"
+                                  VerticalAlignment="Center"
+                                  IsEnabled="{Binding CanEditSettings}" />
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </ScrollViewer>
+</Page>
