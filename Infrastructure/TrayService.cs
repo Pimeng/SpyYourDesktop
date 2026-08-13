@@ -32,6 +32,7 @@ public sealed class TrayService : IDisposable
     private readonly SubclassProc _subclassProc;
     private IntPtr _windowHandle;
     private IntPtr _menuHandle;
+    private IntPtr _iconHandle;
     private bool _isVisible;
     private bool _disposed;
 
@@ -116,8 +117,8 @@ public sealed class TrayService : IDisposable
             return;
         }
 
-        _disposed = true;
         Hide();
+        _disposed = true;
         if (_windowHandle != IntPtr.Zero)
         {
             RemoveWindowSubclass(_windowHandle, _subclassProc, SubclassId);
@@ -126,6 +127,12 @@ public sealed class TrayService : IDisposable
         if (_menuHandle != IntPtr.Zero)
         {
             DestroyMenu(_menuHandle);
+        }
+
+        if (_iconHandle != IntPtr.Zero)
+        {
+            DestroyIcon(_iconHandle);
+            _iconHandle = IntPtr.Zero;
         }
     }
 
@@ -136,9 +143,21 @@ public sealed class TrayService : IDisposable
         uID = 1,
         uFlags = NotifyMessage | NotifyIcon | NotifyTip,
         uCallbackMessage = CallbackMessage,
-        hIcon = LoadIcon(IntPtr.Zero, new IntPtr(32512)),
+        hIcon = GetApplicationIcon(),
         szTip = "SpyYourDesktop"
     };
+
+    private IntPtr GetApplicationIcon()
+    {
+        if (_iconHandle != IntPtr.Zero)
+        {
+            return _iconHandle;
+        }
+
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "App.ico");
+        _iconHandle = LoadImage(IntPtr.Zero, iconPath, ImageIcon, 0, 0, LoadFromFile | DefaultSize);
+        return _iconHandle;
+    }
 
     private IntPtr WindowSubclassProc(
         IntPtr hWnd,
@@ -251,8 +270,15 @@ public sealed class TrayService : IDisposable
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern bool Shell_NotifyIcon(uint message, ref NOTIFYICONDATA data);
 
-    [DllImport("user32.dll")]
-    private static extern IntPtr LoadIcon(IntPtr instance, IntPtr iconName);
+    private const uint ImageIcon = 1;
+    private const uint LoadFromFile = 0x00000010;
+    private const uint DefaultSize = 0x00000040;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr LoadImage(IntPtr instance, string name, uint type, int width, int height, uint loadFlags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool DestroyIcon(IntPtr icon);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr CreatePopupMenu();
