@@ -79,6 +79,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         CheckForUpdatesCommand = new AsyncCommand(() => StartUpdateCheckAsync(manual: true), () => !IsBusy);
         ApplyUpdateCommand = new AsyncCommand(ApplyUpdateAsync, () => AvailableUpdate is not null && !IsBusy);
         SkipUpdateCommand = new AsyncCommand(SkipUpdateAsync, () => AvailableUpdate is not null && !IsBusy);
+        DismissNoticeCommand = new RelayCommand(DismissNotice);
         OpenReleaseCommand = new RelayCommand(OpenReleasePage, () => AvailableUpdate is not null);
         OpenLogCommand = new RelayCommand(OpenLogFile);
 
@@ -98,6 +99,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public ICommand CheckForUpdatesCommand { get; }
     public ICommand ApplyUpdateCommand { get; }
     public ICommand SkipUpdateCommand { get; }
+    public ICommand DismissNoticeCommand { get; }
     public ICommand OpenReleaseCommand { get; }
     public ICommand OpenLogCommand { get; }
 
@@ -248,7 +250,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     public bool IsNoticeVisible
     {
         get => _isNoticeVisible;
-        private set => SetProperty(ref _isNoticeVisible, value);
+        private set
+        {
+            if (SetProperty(ref _isNoticeVisible, value))
+            {
+                OnPropertyChanged(nameof(AreUpdateActionsVisible));
+            }
+        }
     }
 
     public string NoticeMessage
@@ -268,6 +276,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             }
 
             OnPropertyChanged(nameof(HasAvailableUpdate));
+            OnPropertyChanged(nameof(AreUpdateActionsVisible));
             OnPropertyChanged(nameof(UpdateTag));
             OnPropertyChanged(nameof(UpdateNotes));
             OnPropertyChanged(nameof(CanApplyInPlace));
@@ -277,6 +286,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     }
 
     public bool HasAvailableUpdate => AvailableUpdate is not null;
+    public bool AreUpdateActionsVisible => IsNoticeVisible && HasAvailableUpdate;
     public string UpdateTag => AvailableUpdate?.Tag ?? string.Empty;
     public string UpdateNotes => AvailableUpdate?.Notes ?? string.Empty;
     public bool CanApplyInPlace => _updateService.CanApplyInPlace;
@@ -543,6 +553,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             await SaveConfigurationAsync();
             AvailableUpdate = null;
             UpdateStatus = "已跳过此版本。";
+            DismissNotice();
         }
         catch (Exception exception)
         {
@@ -554,6 +565,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             IsBusy = false;
         }
     }
+
+    private void DismissNotice() => IsNoticeVisible = false;
 
     private void OpenReleasePage()
     {
