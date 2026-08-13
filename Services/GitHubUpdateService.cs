@@ -19,7 +19,7 @@ public interface IUpdateService
 
 public sealed class GitHubUpdateService(HttpClient httpClient, IAppLogger logger) : IUpdateService
 {
-    private const string Owner = "BlueYeeeee";
+    private const string Owner = "Pimeng";
     private const string Repository = "SpyYourDesktop";
 
     public string CurrentVersion => GetCurrentVersionString();
