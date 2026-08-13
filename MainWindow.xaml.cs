@@ -1,6 +1,7 @@
 using Desktop.Infrastructure;
 using Desktop.ViewModels;
 using Desktop.Views;
+using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -23,6 +24,7 @@ public sealed partial class MainWindow : Window
         _tray = tray;
         _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         _appWindow = GetAppWindow();
+        ConfigureTitleBar();
         _tray.Attach(WindowNative.GetWindowHandle(this));
 
         RootFrame.Content = new MonitoringPage { DataContext = _viewModel };
@@ -106,5 +108,16 @@ public sealed partial class MainWindow : Window
         var windowHandle = WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(windowHandle);
         return AppWindow.GetFromWindowId(windowId);
+    }
+
+    private void ConfigureTitleBar()
+    {
+        _appWindow.TitleBar.ExtendsContentIntoTitleBar = true;
+        _appWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+        _appWindow.TitleBar.BackgroundColor = Colors.Transparent;
+        _appWindow.TitleBar.InactiveBackgroundColor = Colors.Transparent;
+        _appWindow.TitleBar.ButtonBackgroundColor = Colors.Transparent;
+        _appWindow.TitleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        SetTitleBar(AppTitleBar);
     }
 }

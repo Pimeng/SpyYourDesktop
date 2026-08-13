@@ -13,7 +13,6 @@
                     IsPaneToggleButtonVisible="True"
                     OpenPaneLength="248"
                     CompactPaneLength="52"
-                    PaneTitle="SpyYourDesktop"
                     SelectionChanged="RootNavigation_SelectionChanged">
         <NavigationView.MenuItems>
             <NavigationViewItem Content="概览" Tag="Overview">

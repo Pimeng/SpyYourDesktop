@@ -12,5 +12,23 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Frame x:Name="RootFrame" />
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid x:Name="AppTitleBar"
+              Height="48"
+              Padding="20,0,0,0"
+              Background="Transparent">
+            <TextBlock Text="SpyYourDesktop"
+                       VerticalAlignment="Center"
+                       FontSize="15"
+                       FontWeight="SemiBold"
+                       Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
+        </Grid>
+
+        <Frame x:Name="RootFrame" Grid.Row="1" />
+    </Grid>
 </Window>
