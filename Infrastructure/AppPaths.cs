@@ -6,13 +6,11 @@ public sealed class AppPaths
 
     public AppPaths()
     {
-        var root = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            DisplayName);
+        var dataRoot = AppContext.BaseDirectory;
 
-        DataDirectory = root;
-        LogDirectory = Path.Combine(root, "logs");
-        ConfigFile = Path.Combine(root, "config.json");
+        DataDirectory = dataRoot;
+        LogDirectory = Path.Combine(dataRoot, "logs");
+        ConfigFile = Path.Combine(AppContext.BaseDirectory, "config.json");
         LogFile = Path.Combine(LogDirectory, $"app-usage_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
     }
 
@@ -20,5 +18,4 @@ public sealed class AppPaths
     public string LogDirectory { get; }
     public string ConfigFile { get; }
     public string LogFile { get; }
-    public string LegacyConfigFile => Path.Combine(AppContext.BaseDirectory, "config.json");
 }

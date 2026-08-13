@@ -25,11 +25,7 @@ public sealed class ConfigurationStore(AppPaths paths) : IConfigurationStore
 
     public async Task<AppConfig> LoadAsync(CancellationToken cancellationToken = default)
     {
-        var source = File.Exists(paths.ConfigFile)
-            ? paths.ConfigFile
-            : paths.LegacyConfigFile;
-
-        if (!File.Exists(source))
+        if (!File.Exists(paths.ConfigFile))
         {
             _lastLoadSucceeded = true;
             return new AppConfig();
@@ -37,7 +33,7 @@ public sealed class ConfigurationStore(AppPaths paths) : IConfigurationStore
 
         try
         {
-            await using var stream = File.OpenRead(source);
+            await using var stream = File.OpenRead(paths.ConfigFile);
             var config = await JsonSerializer.DeserializeAsync<AppConfig>(stream, JsonOptions, cancellationToken);
             config ??= new AppConfig();
             _lastLoadSucceeded = true;
