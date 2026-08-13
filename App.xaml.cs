@@ -25,6 +25,7 @@ namespace Desktop
         private MainWindow? _window;
         private MainViewModel? _viewModel;
         private TrayService? _tray;
+        private WindowsNotificationService? _notifications;
         private RegisteredWaitHandle? _showWindowWait;
         private Task? _initializationTask;
         private bool _shutdownStarted;
@@ -42,7 +43,11 @@ namespace Desktop
             _instanceMutex = new Mutex(true, InstanceMutexName, out var createdNew);
             if (!createdNew)
             {
-                _showWindowEvent.Set();
+                if (!(HasProcessArgument("--startup") && HasProcessArgument("--minimized")))
+                {
+                    _showWindowEvent.Set();
+                }
+
                 return;
             }
 
@@ -72,8 +77,14 @@ namespace Desktop
 
             var dispatcherQueue = DispatcherQueue.GetForCurrentThread();
             var lifetime = new ApplicationLifetime(dispatcherQueue, () => _ = ShutdownAndCloseAsync());
-            _viewModel = _factory.Create(lifetime, dispatcherQueue);
             _tray = new TrayService();
+            _notifications = new WindowsNotificationService();
+            _notifications.Register();
+            if (!_notifications.IsAvailable)
+            {
+                _ = _logger.LogAsync($"[notification-register] {_notifications.LastError}");
+            }
+            _viewModel = _factory.Create(lifetime, dispatcherQueue);
             _window = new MainWindow(_viewModel, _tray);
             _window.ClosedByUser += OnWindowClosed;
             _window.ExitRequested += OnExitRequested;
@@ -89,10 +100,17 @@ namespace Desktop
                 null,
                 Timeout.Infinite,
                 executeOnlyOnce: false);
-            _window.Activate();
-            if (HasArgument(args.Arguments, "--minimized") || HasArgument(args.Arguments, "-m"))
+            var startMinimized = HasArgument(args.Arguments, "--minimized") || HasArgument(args.Arguments, "-m");
+            if (startMinimized)
             {
-                _window.HideToTray();
+                if (!_window.HideToTray())
+                {
+                    _window.Activate();
+                }
+            }
+            else
+            {
+                _window.Activate();
             }
 
             _initializationTask = InitializeAsync(args.Arguments, _viewModel.ApplicationCancellationToken);
@@ -110,7 +128,16 @@ namespace Desktop
                 await _viewModel.InitializeAsync(commandLine, cancellationToken);
                 if (HasArgument(commandLine, "--startup") && _viewModel.IsRunning)
                 {
-                    _tray?.ShowNotification("SpyYourDesktop 启动成功并开始监视窗口");
+                    const string message = "SpyYourDesktop 启动成功并开始监视窗口";
+                    if (!(_notifications?.Show(message) ?? false))
+                    {
+                        _ = _logger.LogAsync($"[notification-startup] Windows notification failed: {_notifications?.LastError}");
+                        _tray?.ShowNotification(message);
+                    }
+                    else
+                    {
+                        _ = _logger.LogAsync("[notification-startup] Windows notification sent.");
+                    }
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -123,9 +150,16 @@ namespace Desktop
         }
 
         private static bool HasArgument(string commandLine, string expectedArgument) =>
+            HasTextArgument(commandLine, expectedArgument) || HasProcessArgument(expectedArgument);
+
+        private static bool HasProcessArgument(string expectedArgument) =>
+            Environment.GetCommandLineArgs()
+                .Skip(1)
+                .Any(argument => string.Equals(argument, expectedArgument, StringComparison.OrdinalIgnoreCase));
+
+        private static bool HasTextArgument(string commandLine, string expectedArgument) =>
             commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Any(argument =>
-                    string.Equals(argument, expectedArgument, StringComparison.OrdinalIgnoreCase));
+                .Any(argument => string.Equals(argument, expectedArgument, StringComparison.OrdinalIgnoreCase));
 
         private void OnWindowClosed(object? sender, EventArgs e)
         {
@@ -192,6 +226,7 @@ namespace Desktop
             finally
             {
                 _tray?.Dispose();
+                _notifications?.Dispose();
                 _factory?.Dispose();
                 _showWindowWait?.Unregister(null);
                 _showWindowEvent.Dispose();
@@ -222,7 +257,15 @@ namespace Desktop
             var ingest = new UsageIngestService(_httpClient);
             var monitoring = new MonitoringService(foreground, ingest, logger);
             var updates = new GitHubUpdateService(_httpClient, logger);
-            return new MainViewModel(configuration, new StartupService(), monitoring, updates, logger, paths, lifetime, dispatcherQueue);
+            return new MainViewModel(
+                configuration,
+                new StartupService(),
+                monitoring,
+                updates,
+                logger,
+                paths,
+                lifetime,
+                dispatcherQueue);
         }
 
         public void Dispose() => _httpClient.Dispose();

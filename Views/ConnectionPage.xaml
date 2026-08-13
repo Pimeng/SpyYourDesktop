@@ -150,8 +150,9 @@
                         </ComboBox>
                     </Grid>
                 </StackPanel>
-            </Border>
-            </Grid>
+             </Border>
+
+             </Grid>
         </ScrollViewer>
 
         <Border Canvas.ZIndex="1"

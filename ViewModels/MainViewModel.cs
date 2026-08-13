@@ -896,6 +896,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
     private void ShowError(string message)
     {
+        _ = _logger.LogAsync($"[ui-error] {message}");
         RunOnUi(() =>
         {
             ErrorMessage = message;
