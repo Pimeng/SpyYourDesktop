@@ -38,6 +38,7 @@ public sealed partial class MainWindow : Window
         _tray.StartRequested += (_, _) => RunOnUi(() => _viewModel.StartCommand.Execute(null));
         _tray.StopRequested += (_, _) => RunOnUi(() => _viewModel.StopCommand.Execute(null));
         _tray.ExitRequested += (_, _) => RunOnUi(() => ExitRequested?.Invoke(this, EventArgs.Empty));
+        _tray.MinimizeRequested += (_, _) => RunOnUi(OnMinimizeRequested);
 
         _viewModel.PropertyChanged += (_, args) =>
         {
@@ -82,7 +83,18 @@ public sealed partial class MainWindow : Window
     {
         _tray.Hide();
         _appWindow.Show();
+        NativeMethods.ShowWindow(WindowNative.GetWindowHandle(this), NativeMethods.RestoreWindow);
         Activate();
+    }
+
+    private void OnMinimizeRequested()
+    {
+        if (_forceClose || !_viewModel.AllowBackground)
+        {
+            return;
+        }
+
+        HideToTray();
     }
 
     private void OnClosed(object sender, WindowEventArgs args)

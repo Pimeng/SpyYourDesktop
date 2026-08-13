@@ -12,6 +12,8 @@ public sealed class TrayService : IDisposable
     private const uint NotifyIcon = 0x00000002;
     private const uint NotifyTip = 0x00000004;
     private const uint CallbackMessage = 0x8001;
+    private const uint SizeMessage = 0x0005;
+    private const uint SizeMinimized = 1;
     private const uint WindowMessage = 0x0111;
     private const uint LeftButtonDoubleClick = 0x0203;
     private const uint RightButtonUp = 0x0205;
@@ -47,6 +49,7 @@ public sealed class TrayService : IDisposable
     public event EventHandler? StartRequested;
     public event EventHandler? StopRequested;
     public event EventHandler? ExitRequested;
+    public event EventHandler? MinimizeRequested;
 
     public void Attach(IntPtr windowHandle)
     {
@@ -183,6 +186,14 @@ public sealed class TrayService : IDisposable
         {
             var command = unchecked((uint)wParam.ToInt64() & 0xFFFF);
             DispatchCommand(command);
+        }
+        else if (message == SizeMessage)
+        {
+            var sizeType = unchecked((uint)wParam.ToInt64()) & 0xFFFF;
+            if (sizeType == SizeMinimized)
+            {
+                MinimizeRequested?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         return DefSubclassProc(hWnd, message, wParam, lParam);

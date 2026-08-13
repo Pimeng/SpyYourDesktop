@@ -70,6 +70,10 @@ namespace Desktop
             _window.ClosedByUser += OnWindowClosed;
             _window.ExitRequested += OnExitRequested;
             _window.Activate();
+            if (HasMinimizedArgument(args.Arguments))
+            {
+                _window.HideToTray();
+            }
 
             _initializationTask = InitializeAsync(args.Arguments, _viewModel.ApplicationCancellationToken);
         }
@@ -84,10 +88,6 @@ namespace Desktop
             try
             {
                 await _viewModel.InitializeAsync(commandLine, cancellationToken);
-                if (_viewModel.ShouldStartHidden)
-                {
-                    _window.HideToTray();
-                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -97,6 +97,12 @@ namespace Desktop
                 NativeMethods.ShowMessage($"应用初始化失败：{exception.Message}", "SpyYourDesktop");
             }
         }
+
+        private static bool HasMinimizedArgument(string commandLine) =>
+            commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(argument =>
+                    string.Equals(argument, "--minimized", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(argument, "-m", StringComparison.OrdinalIgnoreCase));
 
         private void OnWindowClosed(object? sender, EventArgs e)
         {

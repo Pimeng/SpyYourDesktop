@@ -328,8 +328,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         private set => SetProperty(ref _updateProgressPercent, value);
     }
 
-    public bool ShouldStartHidden { get; private set; }
-
     public async Task InitializeAsync(string commandLine, CancellationToken cancellationToken = default)
     {
         if (_isInitialized)
@@ -369,10 +367,6 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         await _logger.LogAsync("=== AppUsageMonitor started ===", cancellationToken);
 
         var arguments = commandLine.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        ShouldStartHidden = arguments.Any(argument =>
-            string.Equals(argument, "--minimized", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(argument, "-m", StringComparison.OrdinalIgnoreCase));
-
         var elevatedIndex = Array.FindIndex(arguments, argument =>
             string.Equals(argument, "--elevated-update", StringComparison.OrdinalIgnoreCase));
         if (elevatedIndex >= 0 && elevatedIndex + 1 < arguments.Length)
