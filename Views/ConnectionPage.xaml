@@ -7,8 +7,14 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
     <Grid>
-        <ScrollViewer VerticalScrollBarVisibility="Auto">
-            <Grid MaxWidth="1040" Padding="32,28,32,128">
+        <ScrollViewer x:Name="ContentScrollViewer"
+                      HorizontalScrollBarVisibility="Disabled"
+                      HorizontalContentAlignment="Stretch"
+                      VerticalScrollBarVisibility="Auto">
+            <Grid Width="{Binding ActualWidth, ElementName=ContentScrollViewer}"
+                  MaxWidth="1040"
+                  HorizontalAlignment="Center"
+                  Padding="32,28,32,128">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />

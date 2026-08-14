@@ -6,8 +6,15 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
-    <ScrollViewer VerticalScrollBarVisibility="Auto">
-        <Grid MaxWidth="1040" Padding="32,28,32,40" RowSpacing="22">
+    <ScrollViewer x:Name="ContentScrollViewer"
+                  HorizontalScrollBarVisibility="Disabled"
+                  HorizontalContentAlignment="Stretch"
+                  VerticalScrollBarVisibility="Auto">
+        <Grid Width="{Binding ActualWidth, ElementName=ContentScrollViewer}"
+              MaxWidth="1040"
+              HorizontalAlignment="Center"
+              Padding="32,28,32,40"
+              RowSpacing="22">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
