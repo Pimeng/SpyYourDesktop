@@ -58,10 +58,11 @@ public sealed class UsageSentEventArgs(DateTimeOffset sentAt, string application
     public string Title { get; } = title;
 }
 
-public sealed class MonitoringErrorEventArgs(string message, bool stopsMonitoring) : EventArgs
+public sealed class MonitoringErrorEventArgs(string message, bool stopsMonitoring, int? statusCode = null) : EventArgs
 {
     public string Message { get; } = message;
     public bool StopsMonitoring { get; } = stopsMonitoring;
+    public int? StatusCode { get; } = statusCode;
 }
 
 public sealed class IngestErrorException(

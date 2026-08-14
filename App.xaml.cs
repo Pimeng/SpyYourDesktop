@@ -84,7 +84,7 @@ namespace Desktop
             {
                 _ = _logger.LogAsync($"[notification-register] {_notifications.LastError}");
             }
-            _viewModel = _factory.Create(lifetime, dispatcherQueue);
+            _viewModel = _factory.Create(lifetime, dispatcherQueue, _notifications!);
             _window = new MainWindow(_viewModel, _tray);
             _window.ClosedByUser += OnWindowClosed;
             _window.ExitRequested += OnExitRequested;
@@ -250,7 +250,10 @@ namespace Desktop
             Timeout = TimeSpan.FromSeconds(30)
         };
 
-        public MainViewModel Create(IApplicationLifetime lifetime, DispatcherQueue dispatcherQueue)
+        public MainViewModel Create(
+            IApplicationLifetime lifetime,
+            DispatcherQueue dispatcherQueue,
+            WindowsNotificationService notifications)
         {
             var configuration = new ConfigurationStore(paths);
             var foreground = new ForegroundWindowService();
@@ -263,6 +266,7 @@ namespace Desktop
                 monitoring,
                 updates,
                 logger,
+                notifications,
                 paths,
                 lifetime,
                 dispatcherQueue);

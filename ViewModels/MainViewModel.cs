@@ -19,6 +19,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private readonly IMonitoringService _monitoringService;
     private readonly IUpdateService _updateService;
     private readonly IAppLogger _logger;
+    private readonly WindowsNotificationService _notifications;
     private readonly AppPaths _paths;
     private readonly IApplicationLifetime _applicationLifetime;
     private readonly DispatcherQueue _dispatcherQueue;
@@ -64,6 +65,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         IMonitoringService monitoringService,
         IUpdateService updateService,
         IAppLogger logger,
+        WindowsNotificationService notifications,
         AppPaths paths,
         IApplicationLifetime applicationLifetime,
         DispatcherQueue dispatcherQueue)
@@ -73,6 +75,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _monitoringService = monitoringService;
         _updateService = updateService;
         _logger = logger;
+        _notifications = notifications;
         _paths = paths;
         _applicationLifetime = applicationLifetime;
         _dispatcherQueue = dispatcherQueue;
@@ -874,6 +877,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             if (args.StopsMonitoring)
             {
                 IsRunning = false;
+                if (args.StatusCode is >= 500 and <= 599)
+                {
+                    const string notification = "上报失败（服务器 5xx，已重试 3 次），监控已停止。";
+                    if (!_notifications.Show(notification))
+                    {
+                        _ = _logger.LogAsync($"[notification-upload-error] {_notifications.LastError}");
+                    }
+                }
+
                 ShowError($"上报失败，监控已停止：{args.Message}");
             }
             else

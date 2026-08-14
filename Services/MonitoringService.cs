@@ -20,6 +20,7 @@ public sealed class MonitoringService(
     IUsageIngestService ingest,
     IAppLogger logger) : IMonitoringService
 {
+    private const int MaxServerErrorRetries = 3;
     private readonly object _stateLock = new();
     private readonly SemaphoreSlim _tickLock = new(1, 1);
     private CancellationTokenSource? _monitorCancellation;
@@ -225,7 +226,7 @@ public sealed class MonitoringService(
 
             try
             {
-                await ingest.SendAsync(payload, settings, cancellationToken);
+                await SendWithRetryAsync(payload, settings, cancellationToken);
             }
             catch (IngestErrorException exception)
             {
@@ -249,6 +250,33 @@ public sealed class MonitoringService(
         finally
         {
             _tickLock.Release();
+        }
+    }
+
+    private async Task SendWithRetryAsync(
+        UploadEvent payload,
+        MonitorSettings settings,
+        CancellationToken cancellationToken)
+    {
+        var retryCount = 0;
+        while (true)
+        {
+            try
+            {
+                await ingest.SendAsync(payload, settings, cancellationToken);
+                return;
+            }
+            catch (IngestErrorException exception)
+                when (exception.StatusCode is >= 500 and <= 599 && retryCount < MaxServerErrorRetries)
+            {
+                retryCount++;
+                await logger.LogAsync(
+                    $"[retry] server error {exception.StatusCode}, attempt {retryCount}/{MaxServerErrorRetries}",
+                    cancellationToken);
+                await Task.Delay(
+                    TimeSpan.FromMilliseconds(500 * (1 << (retryCount - 1))),
+                    cancellationToken);
+            }
         }
     }
 
@@ -279,7 +307,8 @@ public sealed class MonitoringService(
         _monitorCancellation?.Cancel();
         Error?.Invoke(this, new MonitoringErrorEventArgs(
             exception.RawBody.Length == 0 ? exception.Message : exception.RawBody,
-            stopsMonitoring: true));
+            stopsMonitoring: true,
+            statusCode: exception.StatusCode));
     }
 
     private void SetRunning(bool running)
