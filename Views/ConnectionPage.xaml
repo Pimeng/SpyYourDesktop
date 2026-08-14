@@ -84,15 +84,13 @@
                                    Value="{Binding IntervalSeconds, Mode=TwoWay}"
                                    Minimum="5"
                                    Maximum="3600"
-                                   HorizontalAlignment="Stretch"
-                                   IsEnabled="{Binding CanEditSettings}" />
+                                   HorizontalAlignment="Stretch" />
                         <NumberBox Header="心跳（秒）"
                                    Grid.Column="1"
                                    Value="{Binding HeartbeatSeconds, Mode=TwoWay}"
                                    Minimum="10"
                                    Maximum="3600"
-                                   HorizontalAlignment="Stretch"
-                                   IsEnabled="{Binding CanEditSettings}" />
+                                   HorizontalAlignment="Stretch" />
                     </Grid>
                 </StackPanel>
             </Border>
@@ -118,7 +116,6 @@
                         <ComboBox Grid.Row="0"
                                   Header="开机自启动"
                                   SelectedIndex="{Binding StartupModeIndex, Mode=TwoWay}"
-                                  IsEnabled="{Binding CanEditSettings}"
                                   HorizontalAlignment="Stretch">
                             <ComboBoxItem Content="禁用自启动" />
                             <ComboBoxItem Content="开机静默自启动并启动监控" />
@@ -128,7 +125,6 @@
                                   Grid.Column="1"
                                   Header="关闭窗口行为"
                                   SelectedIndex="{Binding WindowCloseModeIndex, Mode=TwoWay}"
-                                  IsEnabled="{Binding CanEditSettings}"
                                   HorizontalAlignment="Stretch">
                             <ComboBoxItem Content="最小化" />
                             <ComboBoxItem Content="退出" />
@@ -144,7 +140,6 @@
                                   Grid.Column="1"
                                   Header="是否上报过长标题"
                                   SelectedIndex="{Binding LongTitleModeIndex, Mode=TwoWay}"
-                                  IsEnabled="{Binding CanEditSettings}"
                                   HorizontalAlignment="Stretch">
                             <ComboBoxItem Content="截断至 140 字符" />
                             <ComboBoxItem Content="不截断" />

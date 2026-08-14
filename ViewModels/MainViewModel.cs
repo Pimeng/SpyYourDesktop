@@ -982,6 +982,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null)
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        if (_isInitialized && IsRunning && propertyName is
+            nameof(IntervalSeconds) or
+            nameof(HeartbeatSeconds) or
+            nameof(ForceAllowLongTitle))
+        {
+            _monitoringService.UpdateRuntimeSettings(
+                IntervalSeconds,
+                HeartbeatSeconds,
+                ForceAllowLongTitle);
+        }
+
         if (_isInitialized && propertyName is
             nameof(ServerUrl) or
             nameof(IntervalSeconds) or

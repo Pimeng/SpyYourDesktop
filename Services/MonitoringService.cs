@@ -11,6 +11,7 @@ public interface IMonitoringService : IAsyncDisposable
     event EventHandler<MonitoringErrorEventArgs>? Error;
     Task StartAsync(MonitorSettings settings, CancellationToken applicationCancellation);
     Task StopAsync();
+    void UpdateRuntimeSettings(int intervalSeconds, int heartbeatSeconds, bool forceAllowLongTitle);
     Task SendCurrentAsync(bool privacyMode, CancellationToken cancellationToken);
 }
 
@@ -118,6 +119,24 @@ public sealed class MonitoringService(
         {
             using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, monitorToken);
             await TickAsync(linkedCancellation.Token, force: true);
+        }
+    }
+
+    public void UpdateRuntimeSettings(int intervalSeconds, int heartbeatSeconds, bool forceAllowLongTitle)
+    {
+        lock (_stateLock)
+        {
+            if (_settings is null)
+            {
+                return;
+            }
+
+            _settings = _settings with
+            {
+                IntervalSeconds = Math.Clamp(intervalSeconds, 5, 3600),
+                HeartbeatSeconds = Math.Clamp(heartbeatSeconds, 10, 3600),
+                ForceAllowLongTitle = forceAllowLongTitle
+            };
         }
     }
 
