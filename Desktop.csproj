@@ -48,6 +48,8 @@
     <PublishReadyToRun>false</PublishReadyToRun>
     <PublishTrimmed>false</PublishTrimmed>
     <PublishSingleFile>true</PublishSingleFile>
+    <!-- Keep the PRI name stable when the downloaded single-file EXE is renamed. -->
+    <ProjectPriFileName Condition="'$(PublishSingleFile)' == 'true'">resources.pri</ProjectPriFileName>
     <IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
