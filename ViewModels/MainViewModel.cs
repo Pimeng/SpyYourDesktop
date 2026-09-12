@@ -41,6 +41,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private bool _allowBackground;
     private bool _privacyMode;
     private bool _forceAllowLongTitle;
+    private bool _reportMedia;
     private bool _isRunning;
     private bool _isBusy;
     private bool _isInitialized;
@@ -49,6 +50,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private string _lastSentAt = "尚未上报";
     private string _lastApplication = "尚未采集";
     private string _lastTitle = "尚未采集";
+    private string _lastMedia = "尚未采集";
     private string _errorMessage = string.Empty;
     private string _noticeMessage = string.Empty;
     private bool _isErrorVisible;
@@ -251,6 +253,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         }
     }
 
+    /// <summary>是否读取系统媒体（SMTC）信息并随活动记录一起上报。</summary>
+    public bool ReportMedia
+    {
+        get => _reportMedia;
+        set => SetProperty(ref _reportMedia, value);
+    }
+
     public int LongTitleModeIndex
     {
         get => ForceAllowLongTitle ? 1 : 0;
@@ -348,6 +357,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         private set => SetProperty(ref _lastTitle, value);
     }
 
+    public string LastMedia
+    {
+        get => _lastMedia;
+        private set => SetProperty(ref _lastMedia, value);
+    }
+
     public bool IsErrorVisible
     {
         get => _isErrorVisible;
@@ -432,6 +447,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _startupMode = config.StartupMode ?? (config.AutoStartLegacy == true ? StartupMode.Visible : StartupMode.Disabled);
         _allowBackground = config.AllowBackground;
         _forceAllowLongTitle = config.ForceAllowLongTitle;
+        _reportMedia = config.ReportMedia;
         _skippedVersion = config.SkippedVersion;
         _privacyMode = false;
 
@@ -820,7 +836,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             StartupMode = _startupMode,
             AllowBackground = AllowBackground,
             SkippedVersion = _skippedVersion,
-            ForceAllowLongTitle = ForceAllowLongTitle
+            ForceAllowLongTitle = ForceAllowLongTitle,
+            ReportMedia = ReportMedia
         }, cancellationToken);
     }
 
@@ -855,7 +872,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             MachineId.Trim(),
             UploadKey,
             PrivacyMode,
-            ForceAllowLongTitle);
+            ForceAllowLongTitle,
+            ReportMedia);
         message = string.Empty;
         return true;
     }
@@ -869,6 +887,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             LastSentAt = args.SentAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
             LastApplication = args.Application;
             LastTitle = args.Title;
+            LastMedia = args.Media ?? (ReportMedia ? "当前无媒体播放" : "未开启媒体上报");
         });
 
     private void OnMonitoringError(object? sender, MonitoringErrorEventArgs args) =>
@@ -877,9 +896,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             if (args.StopsMonitoring)
             {
                 IsRunning = false;
-                if (args.StatusCode is >= 500 and <= 599)
+                if (string.Equals(args.Code, IngestProtocol.ErrorCodes.ServerError, StringComparison.Ordinal))
                 {
-                    const string notification = "上报失败（服务器 5xx，已重试 3 次），监控已停止。";
+                    const string notification = "上报失败（服务器错误，已重试），监控已停止。";
                     if (!_notifications.Show(notification))
                     {
                         _ = _logger.LogAsync($"[notification-upload-error] {_notifications.LastError}");
@@ -948,6 +967,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         OnPropertyChanged(nameof(PrivacyModeIndex));
         OnPropertyChanged(nameof(ForceAllowLongTitle));
         OnPropertyChanged(nameof(LongTitleModeIndex));
+        OnPropertyChanged(nameof(ReportMedia));
     }
 
     private void RaiseCommandStates()
@@ -997,12 +1017,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         if (_isInitialized && IsRunning && propertyName is
             nameof(IntervalSeconds) or
             nameof(HeartbeatSeconds) or
-            nameof(ForceAllowLongTitle))
+            nameof(ForceAllowLongTitle) or
+            nameof(ReportMedia))
         {
             _monitoringService.UpdateRuntimeSettings(
                 IntervalSeconds,
                 HeartbeatSeconds,
-                ForceAllowLongTitle);
+                ForceAllowLongTitle,
+                ReportMedia);
         }
 
         if (_isInitialized && propertyName is
@@ -1014,7 +1036,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             nameof(ShowKey) or
             nameof(StartupModeIndex) or
             nameof(AllowBackground) or
-            nameof(ForceAllowLongTitle))
+            nameof(ForceAllowLongTitle) or
+            nameof(ReportMedia))
         {
             QueueConfigurationSave();
         }

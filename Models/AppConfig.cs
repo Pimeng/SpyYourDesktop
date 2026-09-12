@@ -48,4 +48,10 @@ public sealed class AppConfig
 
     [JsonPropertyName("forceAllowLongTitle")]
     public bool ForceAllowLongTitle { get; set; }
+
+    /// <summary>
+    /// 是否读取系统媒体（SMTC）信息并随活动记录一起上报。默认关闭。
+    /// </summary>
+    [JsonPropertyName("reportMedia")]
+    public bool ReportMedia { get; set; }
 }

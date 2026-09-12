@@ -11,23 +11,32 @@ public interface IMonitoringService : IAsyncDisposable
     event EventHandler<MonitoringErrorEventArgs>? Error;
     Task StartAsync(MonitorSettings settings, CancellationToken applicationCancellation);
     Task StopAsync();
-    void UpdateRuntimeSettings(int intervalSeconds, int heartbeatSeconds, bool forceAllowLongTitle);
+    void UpdateRuntimeSettings(int intervalSeconds, int heartbeatSeconds, bool forceAllowLongTitle, bool reportMedia);
     Task SendCurrentAsync(bool privacyMode, CancellationToken cancellationToken);
 }
 
 public sealed class MonitoringService(
     IForegroundWindowService foregroundWindow,
+    IMediaSessionService mediaSession,
     IUsageIngestService ingest,
     IAppLogger logger) : IMonitoringService
 {
     private const int MaxServerErrorRetries = 3;
+    private const int DefaultTitleLimit = 150;
+    private const int TitleTruncateMargin = 10;
     private readonly object _stateLock = new();
     private readonly SemaphoreSlim _tickLock = new(1, 1);
+    private readonly HashSet<string> _unsupportedEventTypes = new(StringComparer.Ordinal);
     private CancellationTokenSource? _monitorCancellation;
     private Task? _loopTask;
     private MonitorSettings? _settings;
     private string? _lastTitle;
+    private string? _lastMediaKey;
     private DateTimeOffset _lastSentAt = DateTimeOffset.MinValue;
+    private IngestSessionInfo? _session;
+    private long _sequence;
+    private int? _serverTitleLimit;
+    private TimeSpan _serverPacing = TimeSpan.Zero;
     private bool _isRunning;
     private bool _disposed;
 
@@ -64,12 +73,22 @@ public sealed class MonitoringService(
         {
             _settings = settings;
             _lastTitle = null;
+            _lastMediaKey = null;
             _lastSentAt = DateTimeOffset.MinValue;
+            _session = new IngestSessionInfo
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                StartedAt = ProtocolTime.UtcNow()
+            };
+            _sequence = 0;
+            _serverTitleLimit = null;
+            _serverPacing = TimeSpan.Zero;
+            _unsupportedEventTypes.Clear();
             _isRunning = true;
         }
 
         StatusChanged?.Invoke(this, new MonitoringStatusChangedEventArgs(true));
-        await TickAsync(token, force: true);
+        await TickAsync(token, IngestProtocol.Triggers.Startup);
         if (!token.IsCancellationRequested && IsRunning)
         {
             _loopTask = RunLoopAsync(token);
@@ -119,11 +138,11 @@ public sealed class MonitoringService(
         if (current is not null && IsRunning)
         {
             using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, monitorToken);
-            await TickAsync(linkedCancellation.Token, force: true);
+            await TickAsync(linkedCancellation.Token, IngestProtocol.Triggers.Manual);
         }
     }
 
-    public void UpdateRuntimeSettings(int intervalSeconds, int heartbeatSeconds, bool forceAllowLongTitle)
+    public void UpdateRuntimeSettings(int intervalSeconds, int heartbeatSeconds, bool forceAllowLongTitle, bool reportMedia)
     {
         lock (_stateLock)
         {
@@ -136,7 +155,8 @@ public sealed class MonitoringService(
             {
                 IntervalSeconds = Math.Clamp(intervalSeconds, 5, 3600),
                 HeartbeatSeconds = Math.Clamp(heartbeatSeconds, 10, 3600),
-                ForceAllowLongTitle = forceAllowLongTitle
+                ForceAllowLongTitle = forceAllowLongTitle,
+                ReportMedia = reportMedia
             };
         }
     }
@@ -149,7 +169,7 @@ public sealed class MonitoringService(
             {
                 var interval = GetInterval();
                 await Task.Delay(interval, cancellationToken);
-                await TickAsync(cancellationToken, force: false);
+                await TickAsync(cancellationToken, forceTrigger: null);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -165,7 +185,9 @@ public sealed class MonitoringService(
     {
         lock (_stateLock)
         {
-            return TimeSpan.FromSeconds(Math.Clamp(_settings?.IntervalSeconds ?? 5, 5, 3600));
+            var interval = TimeSpan.FromSeconds(Math.Clamp(_settings?.IntervalSeconds ?? 5, 5, 3600));
+            // 服务端可以通过 pacing.next_upload_after_ms 主动限速。
+            return _serverPacing > interval ? _serverPacing : interval;
         }
     }
 
@@ -177,18 +199,20 @@ public sealed class MonitoringService(
         }
     }
 
-    private async Task TickAsync(CancellationToken cancellationToken, bool force)
+    private async Task TickAsync(CancellationToken cancellationToken, string? forceTrigger)
     {
         await _tickLock.WaitAsync(cancellationToken);
         try
         {
             MonitorSettings? settings;
+            IngestSessionInfo? session;
             lock (_stateLock)
             {
                 settings = _settings;
+                session = _session;
             }
 
-            if (settings is null || !IsRunning)
+            if (settings is null || session is null || !IsRunning)
             {
                 return;
             }
@@ -196,48 +220,116 @@ public sealed class MonitoringService(
             var snapshot = settings.PrivacyMode
                 ? new ForegroundWindowSnapshot("TA现在不想给你看QAQ", "private mode", 0)
                 : foregroundWindow.ReadCurrent();
-            var title = snapshot.Title;
-            if (!settings.ForceAllowLongTitle && title.Length > 150)
+            var title = ApplyTitlePolicy(snapshot.Title, settings);
+
+            MediaPlaybackSnapshot? media = null;
+            var mediaTracked = settings.ReportMedia && !settings.PrivacyMode;
+            if (mediaTracked)
             {
-                title = title[..140];
+                media = await mediaSession.ReadCurrentAsync(cancellationToken);
+            }
+            else
+            {
+                // 关闭媒体上报或进入隐私模式后不再跟踪，重新开启时会立即补报一次当前状态。
+                _lastMediaKey = null;
             }
 
+            var mediaKey = media?.Key;
             var now = DateTimeOffset.UtcNow;
             var changed = !string.Equals(title, _lastTitle, StringComparison.Ordinal);
+            var mediaChanged = mediaTracked && !string.Equals(mediaKey, _lastMediaKey, StringComparison.Ordinal);
             var heartbeatDue = now - _lastSentAt >= GetHeartbeat();
-            if (!force && !changed && !heartbeatDue)
+            if (forceTrigger is null && !changed && !mediaChanged && !heartbeatDue)
             {
                 return;
             }
 
-            var reason = changed ? "change" : "heartbeat";
-            var payload = new UploadEvent
+            var batchTrigger = forceTrigger
+                ?? (changed
+                    ? IngestProtocol.Triggers.Change
+                    : mediaChanged
+                        ? IngestProtocol.Triggers.Media
+                        : IngestProtocol.Triggers.Heartbeat);
+
+            var windowEvent = new IngestEvent
             {
-                Machine = settings.MachineId,
-                WindowTitle = title,
-                Application = snapshot.Application,
-                Raw = new RawUploadInfo
+                Id = Guid.NewGuid().ToString("N"),
+                Sequence = ++_sequence,
+                Type = IngestProtocol.EventTypes.WindowActivity,
+                OccurredAt = ProtocolTime.ToUtc(now),
+                Trigger = changed ? IngestProtocol.Triggers.Change : batchTrigger,
+                Data = new WindowActivityData
                 {
-                    Exe = snapshot.Application,
-                    ProcessId = snapshot.ProcessId,
-                    Reason = reason
+                    Title = title,
+                    App = snapshot.Application,
+                    ProcessId = snapshot.ProcessId
                 }
             };
 
+            IngestEvent? mediaEvent = null;
+            if (media is not null)
+            {
+                mediaEvent = new IngestEvent
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Sequence = ++_sequence,
+                    Type = IngestProtocol.EventTypes.MediaPlayback,
+                    OccurredAt = ProtocolTime.ToUtc(now),
+                    Trigger = mediaChanged ? IngestProtocol.Triggers.Media : batchTrigger,
+                    Data = new MediaPlaybackData
+                    {
+                        Title = media.Title,
+                        Artist = media.Artist,
+                        Album = media.Album,
+                        Status = media.PlaybackStatus,
+                        Source = media.SourceApp
+                    }
+                };
+            }
+
+            // 服务端已明确表示不支持的类型不再重复发送，避免每轮都产生 ignored 噪声。
+            var events = new List<IngestEvent>(2);
+            if (!_unsupportedEventTypes.Contains(windowEvent.Type))
+            {
+                events.Add(windowEvent);
+            }
+
+            if (mediaEvent is not null && !_unsupportedEventTypes.Contains(mediaEvent.Type))
+            {
+                events.Add(mediaEvent);
+            }
+
+            IngestSendResult result;
             try
             {
-                await SendWithRetryAsync(payload, settings, cancellationToken);
+                result = await SendWithRetryAsync(settings, session, events, cancellationToken);
             }
-            catch (IngestErrorException exception)
+            catch (IngestRequestException exception)
             {
-                await HandleIngestErrorAsync(exception, snapshot, title, cancellationToken);
+                await HandleIngestErrorAsync(exception, cancellationToken);
                 return;
             }
 
-            _lastTitle = title;
+            await HandleIngestResultAsync(result, events, cancellationToken);
+
+            // 只有服务端真正持有的事件（accepted，或幂等命中 DUPLICATE）才算已上报，否则下一轮会重发。
+            if (result.IsDelivered(windowEvent.Id))
+            {
+                _lastTitle = title;
+            }
+
+            if (mediaEvent is not null && mediaTracked && result.IsDelivered(mediaEvent.Id))
+            {
+                _lastMediaKey = mediaKey;
+            }
+
             _lastSentAt = now;
-            await logger.LogAsync($"[sent {reason}] {now.LocalDateTime:yyyy-MM-dd HH:mm:ss} | {snapshot.Application} - {title}", cancellationToken);
-            UsageSent?.Invoke(this, new UsageSentEventArgs(now.ToLocalTime(), snapshot.Application, title));
+            var mediaText = media?.DisplayText;
+            await logger.LogAsync(
+                $"[sent {batchTrigger}] {now.LocalDateTime:yyyy-MM-dd HH:mm:ss} | {snapshot.Application} - {title}" +
+                (mediaText is null ? string.Empty : $" | media: {mediaText}"),
+                cancellationToken);
+            UsageSent?.Invoke(this, new UsageSentEventArgs(now.ToLocalTime(), snapshot.Application, title, mediaText));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -253,9 +345,86 @@ public sealed class MonitoringService(
         }
     }
 
-    private async Task SendWithRetryAsync(
-        UploadEvent payload,
+    /// <summary>
+    /// 客户端侧标题长度策略。服务端通过 FIELD_TOO_LONG 的 details.limit 可以进一步收紧。
+    /// </summary>
+    private string ApplyTitlePolicy(string title, MonitorSettings settings)
+    {
+        var limit = settings.ForceAllowLongTitle ? 0 : DefaultTitleLimit;
+        if (_serverTitleLimit is > 0 && (limit == 0 || _serverTitleLimit.Value < limit))
+        {
+            limit = _serverTitleLimit.Value;
+        }
+
+        if (limit <= 0 || title.Length <= limit)
+        {
+            return title;
+        }
+
+        return title[..Math.Max(1, limit - TitleTruncateMargin)];
+    }
+
+    private async Task HandleIngestResultAsync(
+        IngestSendResult result,
+        IReadOnlyList<IngestEvent> events,
+        CancellationToken cancellationToken)
+    {
+        if (result.ProtocolVersion != 0 && result.ProtocolVersion != IngestProtocol.Version)
+        {
+            await logger.LogAsync(
+                $"[protocol] server replied with version {result.ProtocolVersion}, client uses {IngestProtocol.Version}",
+                cancellationToken);
+        }
+
+        if (result.Pacing?.NextUploadAfterMs is int nextUploadAfterMs)
+        {
+            // 服务端主动限速：作为执行间隔的下限，钳制在 0-60s 以免服务端误配时把客户端卡死。
+            lock (_stateLock)
+            {
+                _serverPacing = TimeSpan.FromMilliseconds(Math.Clamp(nextUploadAfterMs, 0, 60_000));
+            }
+        }
+
+        foreach (var ignored in result.Ignored)
+        {
+            if (string.Equals(ignored.Code, IngestProtocol.ErrorCodes.UnsupportedType, StringComparison.Ordinal)
+                && _unsupportedEventTypes.Add(ignored.Type))
+            {
+                await logger.LogAsync(
+                    $"[unsupported] server does not accept '{ignored.Type}'; it will no longer be sent",
+                    cancellationToken);
+            }
+            else
+            {
+                await logger.LogAsync($"[ignored] type='{ignored.Type}' code='{ignored.Code}'", cancellationToken);
+            }
+        }
+
+        foreach (var rejection in result.Rejected)
+        {
+            var type = events.FirstOrDefault(item => item.Id == rejection.Id)?.Type ?? "unknown";
+            var message = string.IsNullOrWhiteSpace(rejection.Message) ? string.Empty : $" - {rejection.Message}";
+            await logger.LogAsync(
+                $"[rejected] type='{type}' code='{rejection.Code}' retryable={rejection.Retryable}{message}",
+                cancellationToken);
+
+            if (string.Equals(rejection.Code, IngestProtocol.ErrorCodes.FieldTooLong, StringComparison.Ordinal))
+            {
+                // 协议 §6.2：仅当 details.field 为 title（或服务端未给 field）时才把该上限应用到标题。
+                // 不能把别的字段（如 album）的 limit 误用到标题上。
+                var limit = rejection.GetDetailInt("limit", "title");
+                if (limit is > 0 and <= 4096)
+                {
+                    _serverTitleLimit = limit;
+                }
+            }
+        }
+    }
+
+    private async Task<IngestSendResult> SendWithRetryAsync(
         MonitorSettings settings,
+        IngestSessionInfo session,
+        IReadOnlyList<IngestEvent> events,
         CancellationToken cancellationToken)
     {
         var retryCount = 0;
@@ -263,15 +432,16 @@ public sealed class MonitoringService(
         {
             try
             {
-                await ingest.SendAsync(payload, settings, cancellationToken);
-                return;
+                return await ingest.SendAsync(settings, session, events, cancellationToken);
             }
-            catch (IngestErrorException exception)
-                when (exception.StatusCode is >= 500 and <= 599 && retryCount < MaxServerErrorRetries)
+            catch (IngestRequestException exception)
+                when (exception.Retryable &&
+                      !IsRateLimited(exception) &&
+                      retryCount < MaxServerErrorRetries)
             {
                 retryCount++;
                 await logger.LogAsync(
-                    $"[retry] server error {exception.StatusCode}, attempt {retryCount}/{MaxServerErrorRetries}",
+                    $"[retry] {exception.StatusCode} {exception.Code}, attempt {retryCount}/{MaxServerErrorRetries}",
                     cancellationToken);
                 await Task.Delay(
                     TimeSpan.FromMilliseconds(500 * (1 << (retryCount - 1))),
@@ -280,27 +450,22 @@ public sealed class MonitoringService(
         }
     }
 
-    private async Task HandleIngestErrorAsync(
-        IngestErrorException exception,
-        ForegroundWindowSnapshot snapshot,
-        string title,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// 限流走专门的 retry_after_ms 退避路径（协议 §7.1），不应消耗指数退避的重试预算。
+    /// </summary>
+    private static bool IsRateLimited(IngestRequestException exception) =>
+        string.Equals(exception.Code, IngestProtocol.ErrorCodes.RateLimited, StringComparison.Ordinal);
+
+    private async Task HandleIngestErrorAsync(IngestRequestException exception, CancellationToken cancellationToken)
     {
         await logger.LogAsync($"[error] {exception.Message}", cancellationToken);
-        if (exception.StatusCode == 429)
+
+        if (IsRateLimited(exception))
         {
-            var milliseconds = Math.Clamp(ServerErrorParser.ParseRetryAfterMilliseconds(exception.RawBody) + 250, 300, 5000);
+            var milliseconds = Math.Clamp((exception.RetryAfterMs ?? 800) + 250, 300, 5000);
             await logger.LogAsync($"[rate-limit] backoff {milliseconds}ms", cancellationToken);
             await Task.Delay(milliseconds, cancellationToken);
             return;
-        }
-
-        if (ServerErrorParser.IsWindowTitleTooLong(exception))
-        {
-            var (limit, length) = ServerErrorParser.ExtractLimitLength(exception.ServerError ?? exception.RawBody);
-            var limitText = limit?.ToString() ?? "?";
-            var lengthText = length?.ToString() ?? "?";
-            await logger.LogAsync($"[title-too-long] submitted app='{snapshot.Application}' | title='{title}' (limit={limitText}, length={lengthText})", cancellationToken);
         }
 
         SetRunning(false);
@@ -308,7 +473,8 @@ public sealed class MonitoringService(
         Error?.Invoke(this, new MonitoringErrorEventArgs(
             exception.RawBody.Length == 0 ? exception.Message : exception.RawBody,
             stopsMonitoring: true,
-            statusCode: exception.StatusCode));
+            statusCode: exception.StatusCode,
+            code: exception.Code));
     }
 
     private void SetRunning(bool running)

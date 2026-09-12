@@ -65,6 +65,7 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Text="时间" Style="{StaticResource FieldLabelStyle}" />
                         <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding LastSentAt}" />
@@ -72,6 +73,8 @@
                         <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LastApplication}" TextWrapping="Wrap" />
                         <TextBlock Grid.Row="2" Text="窗口标题" Style="{StaticResource FieldLabelStyle}" />
                         <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LastTitle}" TextWrapping="Wrap" MaxLines="3" />
+                        <TextBlock Grid.Row="3" Text="媒体" Style="{StaticResource FieldLabelStyle}" />
+                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding LastMedia}" TextWrapping="Wrap" MaxLines="3" />
                     </Grid>
                     <Button Content="打开日志" Command="{Binding OpenLogCommand}" HorizontalAlignment="Left" />
                 </StackPanel>

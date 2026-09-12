@@ -138,6 +138,14 @@
                             <ComboBoxItem Content="不截断" />
                         </ComboBox>
                     </Grid>
+                    <ToggleSwitch Header="读取并上报媒体信息（SMTC）"
+                                  OnContent="上报媒体"
+                                  OffContent="不上报媒体"
+                                  IsOn="{Binding ReportMedia, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch" />
+                    <TextBlock Text="开启后，监控运行中也会生效：检测到曲目或播放状态变化时会额外上报媒体标题、艺术家、专辑、播放状态和来源应用；没有媒体在播放时不附加媒体信息。隐私模式开启时始终不读取。默认关闭。"
+                               Opacity="0.68"
+                               TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
 

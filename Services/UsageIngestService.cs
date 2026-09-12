@@ -1,65 +1,141 @@
 using System.Reflection;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
-using Desktop.Infrastructure;
 using Desktop.Models;
 
 namespace Desktop.Services;
 
 public interface IUsageIngestService
 {
-    Task SendAsync(UploadEvent payload, MonitorSettings settings, CancellationToken cancellationToken);
+    /// <summary>
+    /// 按协议 v2 组装并发送一批事件。
+    /// 请求级失败抛出 <see cref="IngestRequestException"/>；事件级部分失败由返回值反馈。
+    /// </summary>
+    Task<IngestSendResult> SendAsync(
+        MonitorSettings settings,
+        IngestSessionInfo session,
+        IReadOnlyList<IngestEvent> events,
+        CancellationToken cancellationToken);
 }
 
 public sealed class UsageIngestService(HttpClient httpClient) : IUsageIngestService
 {
-    public async Task SendAsync(UploadEvent payload, MonitorSettings settings, CancellationToken cancellationToken)
+    private static readonly JsonSerializerOptions RequestOptions = new()
     {
-        payload.AppVersion = GetCurrentVersion();
-        payload.Os = "Windows";
+        // 中文标题/艺术家直接以 UTF-8 输出，而不是 \uXXXX 转义，避免体积翻倍。
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, settings.ServerUrl);
-        request.Content = new StringContent(
-            JsonSerializer.Serialize(payload),
-            Encoding.UTF8,
-            "application/json");
-        request.Headers.TryAddWithoutValidation("X-App-Version", payload.AppVersion);
-        request.Headers.TryAddWithoutValidation("X-OS", payload.Os);
+    private static readonly JsonSerializerOptions ResponseOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
+    public async Task<IngestSendResult> SendAsync(
+        MonitorSettings settings,
+        IngestSessionInfo session,
+        IReadOnlyList<IngestEvent> events,
+        CancellationToken cancellationToken)
+    {
+        var request = BuildRequest(settings, session, events);
+
+        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, settings.ServerUrl)
+        {
+            Content = new StringContent(
+                JsonSerializer.Serialize(request, RequestOptions),
+                Encoding.UTF8,
+                "application/json")
+        };
+        httpRequest.Headers.TryAddWithoutValidation("X-Protocol-Version", IngestProtocol.Version.ToString());
+        httpRequest.Headers.TryAddWithoutValidation("X-App-Version", request.Client.Version);
 
         var key = settings.UploadKey.Trim();
         if (key.Length > 0)
         {
-            request.Headers.TryAddWithoutValidation("x-name-key", key);
-            request.Headers.TryAddWithoutValidation(
+            httpRequest.Headers.TryAddWithoutValidation(
                 "Authorization",
                 key.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? key : $"Bearer {key}");
         }
 
-        using var response = await httpClient.SendAsync(request, cancellationToken);
+        using var response = await httpClient.SendAsync(httpRequest, cancellationToken);
         var body = await response.Content.ReadAsStringAsync(cancellationToken);
-        var (serverError, serverMessage) = ServerErrorParser.TryExtract(body);
-        var numericOnly = ServerErrorParser.IsAllDigits(body.Trim());
+        var statusCode = (int)response.StatusCode;
 
-        if (!response.IsSuccessStatusCode || serverError is not null || numericOnly)
+        if (!response.IsSuccessStatusCode)
         {
-            var statusCode = (int)response.StatusCode;
-            if (statusCode == 0 && numericOnly && int.TryParse(body.Trim(), out var numericCode))
-            {
-                statusCode = numericCode;
-            }
-
-            var message = serverError is not null && serverMessage is not null
-                ? $"ingest failed: {statusCode} {serverError} - {serverMessage}"
-                : serverError is not null
-                    ? $"ingest failed: {statusCode} {serverError}"
-                    : $"ingest failed: {statusCode} {body}";
-
-            throw new IngestErrorException(
-                message,
-                statusCode,
-                serverError ?? (numericOnly ? $"code {body.Trim()}" : null),
-                serverMessage ?? body);
+            throw IngestRequestException.FromResponse(statusCode, body);
         }
+
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            // 204 或空体：整批接受，服务端没有逐事件反馈。
+            return IngestSendResult.Empty;
+        }
+
+        IngestResponse? parsed;
+        try
+        {
+            parsed = JsonSerializer.Deserialize<IngestResponse>(body, ResponseOptions);
+        }
+        catch (JsonException exception)
+        {
+            throw new IngestRequestException(
+                $"ingest returned {statusCode} but the body is not valid JSON: {exception.Message}",
+                statusCode,
+                IngestProtocol.ErrorCodes.MalformedRequest,
+                retryable: false,
+                retryAfterMs: null,
+                rawBody: body);
+        }
+
+        if (parsed is null)
+        {
+            return IngestSendResult.Empty;
+        }
+
+        return new IngestSendResult(
+            parsed.ProtocolVersion,
+            parsed.Accepted ?? [],
+            parsed.Rejected ?? [],
+            parsed.Ignored ?? [],
+            parsed.Pacing);
+    }
+
+    private static IngestRequest BuildRequest(
+        MonitorSettings settings,
+        IngestSessionInfo session,
+        IReadOnlyList<IngestEvent> events)
+    {
+        var capabilities = new List<string> { IngestProtocol.EventTypes.WindowActivity };
+        if (settings.ReportMedia)
+        {
+            capabilities.Add(IngestProtocol.EventTypes.MediaPlayback);
+        }
+
+        return new IngestRequest
+        {
+            Client = new IngestClientInfo
+            {
+                Name = IngestProtocol.ClientName,
+                Version = GetCurrentVersion(),
+                Platform = "windows",
+                OsVersion = GetOsVersion(),
+                Capabilities = capabilities
+            },
+            Device = new IngestDeviceInfo { Id = settings.MachineId },
+            Session = session,
+            SentAt = ProtocolTime.UtcNow(),
+            Policy = new IngestPolicy
+            {
+                PrivacyMode = settings.PrivacyMode,
+                SampleIntervalMs = Math.Clamp(settings.IntervalSeconds, 5, 3600) * 1000,
+                HeartbeatMs = Math.Clamp(settings.HeartbeatSeconds, 10, 3600) * 1000,
+                TitleMaxChars = settings.ForceAllowLongTitle ? null : 150,
+                TitleTruncateChars = settings.ForceAllowLongTitle ? null : 140
+            },
+            Events = events
+        };
     }
 
     private static string GetCurrentVersion()
@@ -69,146 +145,17 @@ public sealed class UsageIngestService(HttpClient httpClient) : IUsageIngestServ
             .InformationalVersion;
         return string.IsNullOrWhiteSpace(version) ? "1.0.0.0" : version;
     }
-}
 
-internal static class ServerErrorParser
-{
-    public static (string? Error, string? Message) TryExtract(string? body)
-    {
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            return (null, null);
-        }
-
-        var text = body.Trim();
-        var jsonStart = text.IndexOf('{');
-        if (jsonStart >= 0)
-        {
-            try
-            {
-                using var document = JsonDocument.Parse(text[jsonStart..]);
-                var root = document.RootElement;
-                if (root.ValueKind == JsonValueKind.Object)
-                {
-                    var error = root.TryGetProperty("error", out var errorElement) &&
-                                errorElement.ValueKind == JsonValueKind.String
-                        ? errorElement.GetString()
-                        : null;
-                    var message = root.TryGetProperty("message", out var messageElement) &&
-                                  messageElement.ValueKind == JsonValueKind.String
-                        ? messageElement.GetString()
-                        : null;
-                    if (!string.IsNullOrWhiteSpace(error) || !string.IsNullOrWhiteSpace(message))
-                    {
-                        return (error, message);
-                    }
-                }
-            }
-            catch (JsonException)
-            {
-            }
-        }
-
-        return text.Contains("error", StringComparison.OrdinalIgnoreCase)
-            ? ("Error", text)
-            : (null, null);
-    }
-
-    public static int ParseRetryAfterMilliseconds(string text, int fallbackMilliseconds = 800)
+    private static string GetOsVersion()
     {
         try
         {
-            using var document = JsonDocument.Parse(text.Trim());
-            var root = document.RootElement;
-            if (root.TryGetProperty("retry_after_ms", out var retry) && retry.TryGetInt32(out var retryMilliseconds) && retryMilliseconds > 0)
-            {
-                return retryMilliseconds;
-            }
-
-            int? minimum = null;
-            int? elapsed = null;
-            if (root.TryGetProperty("min_interval_ms", out var minimumElement) && minimumElement.TryGetInt32(out var minimumValue))
-            {
-                minimum = minimumValue;
-            }
-
-            if (root.TryGetProperty("elapsed_ms", out var elapsedElement) && elapsedElement.TryGetInt32(out var elapsedValue))
-            {
-                elapsed = elapsedValue;
-            }
-
-            if (minimum.HasValue && elapsed.HasValue)
-            {
-                return Math.Max(0, minimum.Value - elapsed.Value);
-            }
+            return Environment.OSVersion.Version.ToString();
         }
-        catch (JsonException)
+        catch
         {
+            return string.Empty;
         }
-
-        return fallbackMilliseconds;
     }
-
-    public static bool IsWindowTitleTooLong(IngestErrorException exception)
-    {
-        var text = exception.ServerError ?? exception.RawBody;
-        return text.Contains("window title too long", StringComparison.OrdinalIgnoreCase)
-            || text.Contains("window_title too long", StringComparison.OrdinalIgnoreCase);
-    }
-
-    public static (int? Limit, int? Length) ExtractLimitLength(string text)
-    {
-        int? limit = null;
-        int? length = null;
-        try
-        {
-            using var document = JsonDocument.Parse(NormalizeToJson(text));
-            var root = document.RootElement;
-            if (root.ValueKind == JsonValueKind.Object)
-            {
-                if (root.TryGetProperty("limit", out var limitElement) && limitElement.TryGetInt32(out var limitValue))
-                {
-                    limit = limitValue;
-                }
-
-                if (root.TryGetProperty("length", out var lengthElement) && lengthElement.TryGetInt32(out var lengthValue))
-                {
-                    length = lengthValue;
-                }
-
-                if (limit.HasValue || length.HasValue)
-                {
-                    return (limit, length);
-                }
-            }
-        }
-        catch (JsonException)
-        {
-        }
-
-        var limitMatch = System.Text.RegularExpressions.Regex.Match(text, @"\blimit\s*[:=]\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        if (limitMatch.Success && int.TryParse(limitMatch.Groups[1].Value, out var parsedLimit))
-        {
-            limit = parsedLimit;
-        }
-
-        var lengthMatch = System.Text.RegularExpressions.Regex.Match(text, @"\blength\s*[:=]\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        if (lengthMatch.Success && int.TryParse(lengthMatch.Groups[1].Value, out var parsedLength))
-        {
-            length = parsedLength;
-        }
-
-        return (limit, length);
-    }
-
-    private static string NormalizeToJson(string value)
-    {
-        var text = value.Trim();
-        return text.StartsWith('(') && text.EndsWith(')')
-            ? "{" + text[1..^1] + "}"
-            : text;
-    }
-
-    public static bool IsAllDigits(string? value) =>
-        !string.IsNullOrEmpty(value) && value.All(char.IsDigit);
 }
+

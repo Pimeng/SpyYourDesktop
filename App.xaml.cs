@@ -257,8 +257,9 @@ namespace Desktop
         {
             var configuration = new ConfigurationStore(paths);
             var foreground = new ForegroundWindowService();
+            var media = new MediaSessionService(logger);
             var ingest = new UsageIngestService(_httpClient);
-            var monitoring = new MonitoringService(foreground, ingest, logger);
+            var monitoring = new MonitoringService(foreground, media, ingest, logger);
             var updates = new GitHubUpdateService(_httpClient, logger);
             return new MainViewModel(
                 configuration,
