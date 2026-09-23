@@ -2,8 +2,8 @@ namespace Desktop.Models;
 
 public sealed record MonitorSettings(
     string ServerUrl,
-    int IntervalSeconds,
-    int HeartbeatSeconds,
+    int IntervalMs,
+    int HeartbeatMs,
     string MachineId,
     string UploadKey,
     bool PrivacyMode,

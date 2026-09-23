@@ -83,8 +83,8 @@
   "sent_at": "2026-09-12T10:05:00.000Z",
   "policy": {
     "privacy_mode": false,
-    "sample_interval_ms": 5000,
-    "heartbeat_ms": 10000,
+    "sample_interval_ms": 1000,
+    "heartbeat_ms": 5000,
     "media_idle_timeout_ms": 180000,
     "title_max_chars": 150,
     "title_truncate_chars": 140
@@ -157,8 +157,8 @@
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `privacy_mode` | bool | 是 | 为 `true` 时窗口负载为占位内容，且不含媒体事件 |
-| `sample_interval_ms` | int | 是 | 客户端采样间隔，取值 5000–3600000 |
-| `heartbeat_ms` | int | 是 | 心跳上限，取值 10000–3600000 |
+| `sample_interval_ms` | int | 是 | 客户端采样间隔，取值 0–3600000；0 表示不设最小间隔 |
+| `heartbeat_ms` | int | 是 | 心跳间隔，取值 0–3600000；0 表示不等待心跳间隔 |
 | `media_idle_timeout_ms` | int \| null | 否 | 媒体空闲超时：非播放态的媒体会话持续该时长后应发 `closed`。默认 `180000`（3 分钟），见 §4.2.1 |
 | `title_max_chars` | int \| null | 否 | 客户端侧标题上限。`null` 或缺失表示不限制 |
 | `title_truncate_chars` | int \| null | 否 | 超限时的截断目标长度 |

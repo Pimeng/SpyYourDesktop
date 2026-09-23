@@ -11,8 +11,8 @@ namespace Desktop.ViewModels;
 
 public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 {
-    private const int MinimumIntervalSeconds = 5;
-    private const int MinimumHeartbeatSeconds = 10;
+    private const int MaximumIntervalMs = 3600000;
+    private const int MaximumHeartbeatMs = 3600000;
 
     private readonly IConfigurationStore _configurationStore;
     private readonly IStartupService _startupService;
@@ -32,8 +32,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private Task? _configurationSaveTask;
 
     private string _serverUrl = "http://127.0.0.1:3000/api/ingest";
-    private int _intervalSeconds = MinimumIntervalSeconds;
-    private int _heartbeatSeconds = MinimumHeartbeatSeconds;
+    private int _intervalMs = 1000;
+    private int _heartbeatMs = 5000;
     private string _machineId = string.Empty;
     private string _uploadKey = string.Empty;
     private bool _showKey = true;
@@ -117,16 +117,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         set => SetProperty(ref _serverUrl, value);
     }
 
-    public int IntervalSeconds
+    public int IntervalMs
     {
-        get => _intervalSeconds;
-        set => SetProperty(ref _intervalSeconds, Math.Clamp(value, MinimumIntervalSeconds, 3600));
+        get => _intervalMs;
+        set => SetProperty(ref _intervalMs, Math.Clamp(value, 0, MaximumIntervalMs));
     }
 
-    public int HeartbeatSeconds
+    public int HeartbeatMs
     {
-        get => _heartbeatSeconds;
-        set => SetProperty(ref _heartbeatSeconds, Math.Clamp(value, MinimumHeartbeatSeconds, 3600));
+        get => _heartbeatMs;
+        set => SetProperty(ref _heartbeatMs, Math.Clamp(value, 0, MaximumHeartbeatMs));
     }
 
     public string MachineId
@@ -439,8 +439,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _serverUrl = string.IsNullOrWhiteSpace(config.ServerUrl)
             ? "http://127.0.0.1:3000/api/ingest"
             : config.ServerUrl;
-        _intervalSeconds = Math.Clamp(config.IntervalSeconds <= 0 ? MinimumIntervalSeconds : config.IntervalSeconds, MinimumIntervalSeconds, 3600);
-        _heartbeatSeconds = Math.Clamp(config.HeartbeatSeconds <= 0 ? MinimumHeartbeatSeconds : config.HeartbeatSeconds, MinimumHeartbeatSeconds, 3600);
+        _intervalMs = Math.Clamp(config.IntervalMs, 0, MaximumIntervalMs);
+        _heartbeatMs = Math.Clamp(config.HeartbeatMs, 0, MaximumHeartbeatMs);
         _machineId = config.MachineId?.Trim() ?? string.Empty;
         _uploadKey = config.UploadKey ?? string.Empty;
         _showKey = config.ShowKey;
@@ -828,8 +828,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         await _configurationStore.SaveAsync(new AppConfig
         {
             ServerUrl = ServerUrl.Trim(),
-            IntervalSeconds = Math.Clamp(IntervalSeconds, MinimumIntervalSeconds, 3600),
-            HeartbeatSeconds = Math.Clamp(HeartbeatSeconds, MinimumHeartbeatSeconds, 3600),
+            IntervalMs = Math.Clamp(IntervalMs, 0, MaximumIntervalMs),
+            HeartbeatMs = Math.Clamp(HeartbeatMs, 0, MaximumHeartbeatMs),
             MachineId = MachineId.Trim(),
             UploadKey = UploadKey,
             ShowKey = ShowKey,
@@ -844,9 +844,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private bool CanAutoStart() =>
         ServerUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) &&
         !string.IsNullOrWhiteSpace(MachineId) &&
-        !string.IsNullOrWhiteSpace(UploadKey) &&
-        IntervalSeconds >= MinimumIntervalSeconds &&
-        HeartbeatSeconds >= MinimumHeartbeatSeconds;
+        !string.IsNullOrWhiteSpace(UploadKey);
 
     private bool TryCreateSettings(out MonitorSettings settings, out string message)
     {
@@ -867,8 +865,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
 
         settings = new MonitorSettings(
             uri.ToString(),
-            Math.Clamp(IntervalSeconds, MinimumIntervalSeconds, 3600),
-            Math.Clamp(HeartbeatSeconds, MinimumHeartbeatSeconds, 3600),
+            Math.Clamp(IntervalMs, 0, MaximumIntervalMs),
+            Math.Clamp(HeartbeatMs, 0, MaximumHeartbeatMs),
             MachineId.Trim(),
             UploadKey,
             PrivacyMode,
@@ -955,8 +953,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private void RaiseAllSettingsChanged()
     {
         OnPropertyChanged(nameof(ServerUrl));
-        OnPropertyChanged(nameof(IntervalSeconds));
-        OnPropertyChanged(nameof(HeartbeatSeconds));
+        OnPropertyChanged(nameof(IntervalMs));
+        OnPropertyChanged(nameof(HeartbeatMs));
         OnPropertyChanged(nameof(MachineId));
         OnPropertyChanged(nameof(UploadKey));
         OnPropertyChanged(nameof(ShowKey));
@@ -1015,22 +1013,22 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     {
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         if (_isInitialized && IsRunning && propertyName is
-            nameof(IntervalSeconds) or
-            nameof(HeartbeatSeconds) or
+            nameof(IntervalMs) or
+            nameof(HeartbeatMs) or
             nameof(ForceAllowLongTitle) or
             nameof(ReportMedia))
         {
             _monitoringService.UpdateRuntimeSettings(
-                IntervalSeconds,
-                HeartbeatSeconds,
+                IntervalMs,
+                HeartbeatMs,
                 ForceAllowLongTitle,
                 ReportMedia);
         }
 
         if (_isInitialized && propertyName is
             nameof(ServerUrl) or
-            nameof(IntervalSeconds) or
-            nameof(HeartbeatSeconds) or
+            nameof(IntervalMs) or
+            nameof(HeartbeatMs) or
             nameof(MachineId) or
             nameof(UploadKey) or
             nameof(ShowKey) or

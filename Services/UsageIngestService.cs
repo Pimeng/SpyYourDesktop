@@ -129,8 +129,8 @@ public sealed class UsageIngestService(HttpClient httpClient) : IUsageIngestServ
             Policy = new IngestPolicy
             {
                 PrivacyMode = settings.PrivacyMode,
-                SampleIntervalMs = Math.Clamp(settings.IntervalSeconds, 5, 3600) * 1000,
-                HeartbeatMs = Math.Clamp(settings.HeartbeatSeconds, 10, 3600) * 1000,
+                SampleIntervalMs = Math.Clamp(settings.IntervalMs, 0, 3600000),
+                HeartbeatMs = Math.Clamp(settings.HeartbeatMs, 0, 3600000),
                 MediaIdleTimeoutMs = IngestProtocol.DefaultMediaIdleTimeoutMs,
                 TitleMaxChars = settings.ForceAllowLongTitle ? null : 150,
                 TitleTruncateChars = settings.ForceAllowLongTitle ? null : 140

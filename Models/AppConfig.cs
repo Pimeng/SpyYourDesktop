@@ -14,11 +14,39 @@ public sealed class AppConfig
     [JsonPropertyName("serverUrl")]
     public string ServerUrl { get; set; } = "http://127.0.0.1:3000/api/ingest";
 
+    [JsonPropertyName("intervalMs")]
+    public int IntervalMs { get; set; } = 1000;
+
+    [JsonPropertyName("heartbeatMs")]
+    public int HeartbeatMs { get; set; } = 5000;
+
     [JsonPropertyName("intervalSec")]
-    public int IntervalSeconds { get; set; } = 5;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LegacyIntervalSeconds
+    {
+        get => null;
+        set
+        {
+            if (value is int seconds)
+            {
+                IntervalMs = Math.Clamp(seconds, 0, 3600) * 1000;
+            }
+        }
+    }
 
     [JsonPropertyName("heartbeatSec")]
-    public int HeartbeatSeconds { get; set; } = 10;
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LegacyHeartbeatSeconds
+    {
+        get => null;
+        set
+        {
+            if (value is int seconds)
+            {
+                HeartbeatMs = Math.Clamp(seconds, 0, 3600) * 1000;
+            }
+        }
+    }
 
     [JsonPropertyName("machineId")]
     public string? MachineId { get; set; }

@@ -11,7 +11,7 @@ public interface IMonitoringService : IAsyncDisposable
     event EventHandler<MonitoringErrorEventArgs>? Error;
     Task StartAsync(MonitorSettings settings, CancellationToken applicationCancellation);
     Task StopAsync();
-    void UpdateRuntimeSettings(int intervalSeconds, int heartbeatSeconds, bool forceAllowLongTitle, bool reportMedia);
+    void UpdateRuntimeSettings(int intervalMs, int heartbeatMs, bool forceAllowLongTitle, bool reportMedia);
     Task SendCurrentAsync(bool privacyMode, CancellationToken cancellationToken);
 }
 
@@ -148,7 +148,7 @@ public sealed class MonitoringService(
         }
     }
 
-    public void UpdateRuntimeSettings(int intervalSeconds, int heartbeatSeconds, bool forceAllowLongTitle, bool reportMedia)
+    public void UpdateRuntimeSettings(int intervalMs, int heartbeatMs, bool forceAllowLongTitle, bool reportMedia)
     {
         lock (_stateLock)
         {
@@ -159,8 +159,8 @@ public sealed class MonitoringService(
 
             _settings = _settings with
             {
-                IntervalSeconds = Math.Clamp(intervalSeconds, 5, 3600),
-                HeartbeatSeconds = Math.Clamp(heartbeatSeconds, 10, 3600),
+                IntervalMs = Math.Clamp(intervalMs, 0, 3600000),
+                HeartbeatMs = Math.Clamp(heartbeatMs, 0, 3600000),
                 ForceAllowLongTitle = forceAllowLongTitle,
                 ReportMedia = reportMedia
             };
@@ -191,7 +191,8 @@ public sealed class MonitoringService(
     {
         lock (_stateLock)
         {
-            var interval = TimeSpan.FromSeconds(Math.Clamp(_settings?.IntervalSeconds ?? 5, 5, 3600));
+            var intervalMs = Math.Clamp(_settings?.IntervalMs ?? 1000, 0, 3600000);
+            var interval = TimeSpan.FromMilliseconds(Math.Max(intervalMs, 1));
             // 服务端可以通过 pacing.next_upload_after_ms 主动限速。
             return _serverPacing > interval ? _serverPacing : interval;
         }
@@ -201,7 +202,7 @@ public sealed class MonitoringService(
     {
         lock (_stateLock)
         {
-            return TimeSpan.FromSeconds(Math.Clamp(_settings?.HeartbeatSeconds ?? 10, 10, 3600));
+            return TimeSpan.FromMilliseconds(Math.Clamp(_settings?.HeartbeatMs ?? 5000, 0, 3600000));
         }
     }
 

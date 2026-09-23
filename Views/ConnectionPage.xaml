@@ -85,16 +85,16 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <NumberBox Header="采集间隔（秒）"
-                                   Value="{Binding IntervalSeconds, Mode=TwoWay}"
-                                   Minimum="5"
-                                   Maximum="3600"
+                        <NumberBox Header="采集间隔（ms）"
+                                   Value="{Binding IntervalMs, Mode=TwoWay}"
+                                   Minimum="0"
+                                   Maximum="3600000"
                                    HorizontalAlignment="Stretch" />
-                        <NumberBox Header="心跳（秒）"
+                        <NumberBox Header="心跳（ms）"
                                    Grid.Column="1"
-                                   Value="{Binding HeartbeatSeconds, Mode=TwoWay}"
-                                   Minimum="10"
-                                   Maximum="3600"
+                                   Value="{Binding HeartbeatMs, Mode=TwoWay}"
+                                   Minimum="0"
+                                   Maximum="3600000"
                                    HorizontalAlignment="Stretch" />
                     </Grid>
                     <Grid RowSpacing="14" ColumnSpacing="18">
