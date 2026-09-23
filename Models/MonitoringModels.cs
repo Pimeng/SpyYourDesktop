@@ -52,6 +52,24 @@ public sealed record MediaPlaybackSnapshot(
     }
 }
 
+/// <summary>SMTC 读取结果的三种情形。读取失败不能当作“会话消失”，否则会误发 closed。</summary>
+public enum MediaSessionReadStatus
+{
+    NoSession,
+    Unavailable,
+    Available
+}
+
+public sealed record MediaSessionReadResult(MediaSessionReadStatus Status, MediaPlaybackSnapshot? Snapshot)
+{
+    public static MediaSessionReadResult NoSession { get; } = new(MediaSessionReadStatus.NoSession, null);
+
+    public static MediaSessionReadResult Unavailable { get; } = new(MediaSessionReadStatus.Unavailable, null);
+
+    public static MediaSessionReadResult FromSnapshot(MediaPlaybackSnapshot snapshot) =>
+        new(MediaSessionReadStatus.Available, snapshot);
+}
+
 public sealed class MonitoringStatusChangedEventArgs(bool isRunning) : EventArgs
 {
     public bool IsRunning { get; } = isRunning;

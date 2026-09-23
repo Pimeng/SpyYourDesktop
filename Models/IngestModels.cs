@@ -13,6 +13,9 @@ public static class IngestProtocol
 
     public const string ClientName = "spyyourdesktop";
 
+    /// <summary>媒体空闲超时默认值（毫秒）：非播放态的媒体会话持续该时长后视为没有当前媒体。</summary>
+    public const int DefaultMediaIdleTimeoutMs = 180_000;
+
     /// <summary>事件类型。新增类型是非破坏性扩展。</summary>
     public static class EventTypes
     {
@@ -143,6 +146,11 @@ public sealed class IngestPolicy
 
     [JsonPropertyName("heartbeat_ms")]
     public int HeartbeatMs { get; init; }
+
+    /// <summary>媒体空闲超时（毫秒）。非播放态的媒体会话持续该时长后发送 closed。</summary>
+    [JsonPropertyName("media_idle_timeout_ms")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? MediaIdleTimeoutMs { get; init; }
 
     /// <summary>客户端侧标题长度上限。null 表示不限制。</summary>
     [JsonPropertyName("title_max_chars")]

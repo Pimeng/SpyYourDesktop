@@ -6,7 +6,7 @@
 - 协议版本：`2`
 - 传输：HTTP/1.1 或 HTTP/2，`POST`，`Content-Type: application/json; charset=utf-8`
 - 时间：ISO 8601 UTC，毫秒精度（如 `2026-09-12T10:05:00.123Z`）
-- 字符编码：UTF-8。**非 ASCII 字符以原始 UTF-8 输出，不做 `\uXXXX` 转义**（中文标题与艺术家名很常见，转义会让体积翻倍）。服务端必须能解析两种形式
+- 字符编码：UTF-8
 - 本协议**替换** v1 的扁平淡载荷（`window_title` / `raw.reason` 那一套），v1 端点不再使用
 
 ---
@@ -73,7 +73,7 @@
     "version": "1.5.0",
     "platform": "windows",
     "os_version": "10.0.19045.0",
-    "capabilities": ["window.activity", "media.playback"]
+    "capabilities": ["window.activity", "media.playback", "device.status"]
   },
   "device": { "id": "anyi-desktop" },
   "session": {
@@ -85,6 +85,7 @@
     "privacy_mode": false,
     "sample_interval_ms": 5000,
     "heartbeat_ms": 10000,
+    "media_idle_timeout_ms": 180000,
     "title_max_chars": 150,
     "title_truncate_chars": 140
   },
@@ -158,6 +159,7 @@
 | `privacy_mode` | bool | 是 | 为 `true` 时窗口负载为占位内容，且不含媒体事件 |
 | `sample_interval_ms` | int | 是 | 客户端采样间隔，取值 5000–3600000 |
 | `heartbeat_ms` | int | 是 | 心跳上限，取值 10000–3600000 |
+| `media_idle_timeout_ms` | int \| null | 否 | 媒体空闲超时：非播放态的媒体会话持续该时长后应发 `closed`。默认 `180000`（3 分钟），见 §4.2.1 |
 | `title_max_chars` | int \| null | 否 | 客户端侧标题上限。`null` 或缺失表示不限制 |
 | `title_truncate_chars` | int \| null | 否 | 超限时的截断目标长度 |
 
@@ -194,7 +196,8 @@
 
 ### 4.2 `media.playback`
 
-系统媒体会话（SMTC）信息。仅在 `media` 上报开关开启、且当前存在媒体会话时出现。
+系统媒体会话（SMTC / 安卓 `MediaSession`）信息。它描述的是**「此刻应该展示的媒体」**，
+而不是「历史上出现过的媒体」：仅在 `media` 上报开关开启、且当前存在可展示的媒体会话时出现。
 
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
@@ -206,7 +209,76 @@
 
 > **兼容提示**：`status` 是开放字符串。客户端遇到不认识的 SMTC 状态会原样上报，服务端应把未知值当作"状态未知"处理，不要丢弃整个事件。
 
+#### 4.2.1 生命周期：什么时候必须发 `closed`
+
+`status = "closed"` 是**终态**，表示「该媒体会话已结束，之后不应再把这条媒体当作当前媒体」。
+客户端在下面任一情况发生时，**必须**发送一条 `status: "closed"` 的 `media.playback` 事件
+（只发一次；`title` / `artist` / `album` / `source` 保留最后一次已知值或置空均可，读取端不得依赖它们）：
+
+1. **会话消失**：媒体会话从系统读取结果中消失（应用退出、通知被划掉、会话被销毁），
+   即 `getMediaSession()` 之类的读取从「有」变成「无」。
+   **不得**因为"读不到会话"就静默不上报——那会让读取端永远停在最后一条媒体上。
+2. **空闲超时**：会话仍然存在，但其状态连续为 `paused` / `stopped`（或其它非 `playing` 状态）
+   的时长超过 `policy.media_idle_timeout_ms`（默认 `180000`，即 3 分钟）。
+   即使用户只是暂停播放，超时后也应视作「不再有当前媒体」。
+
+实现要点：
+
+- 计时基准是**「会话进入非 playing 状态的时刻」**，不是「最后一次上报时刻」。
+  用后者的话，心跳会不断刷新计时，媒体永远不会过期（这正是当前线上卡住的原因）。
+- 会话从「有」变「无」应作为一次 `trigger: "media"` 的上报机会，即使当轮没有其它内容变化。
+- `closed` 是普通事件：同样需要 `id`（幂等键）与 `sequence`，重试/幂等规则与其它事件完全一致。
+- `closed` 不终结上报：用户重新播放时，照常发送新的 `playing` 事件即可。
+- 隐私模式下依旧**不产生**任何媒体事件（包括 `closed`），见 §10；读取端会因缺少新鲜事件而自然过期。
+
+对应到参考实现（`clients/android/foreground_client.js`）：
+
+- 现在只在 `media != null` 时才 push 媒体事件，会话消失时什么都不发 —— 需要补一条 `closed`。
+- `MEDIA_REPORT_PAUSED = true` 会让暂停中的会话被心跳反复重报，事件时间一直是新的，
+  读取端的超时兜底因此失效 —— 需要叠加 §4.2.1 第 2 条的空闲超时，超时后改为只发一次 `closed`。
+
+#### 4.2.2 读取端语义（服务端 / 前端）
+
+`GET /api/v2/status` 与前端渲染都按下面的规则判断「当前媒体」：
+
+- 最新一条 `media.playback` 的 `status == "closed"` → 视为**没有当前媒体**
+  （`media: null`，且 `events` 映射里不出现 `media.playback`）。
+- `status == "playing"` → 视为当前媒体（离线设备保留最后已知曲目）。
+- 其它状态 → 事件时间（`received_at`，回退 `access_time`）在 `media_idle_timeout_ms` 之内才算当前媒体，超时视为过期。
+
+也就是说：**客户端的 `closed` 是主路径，读取端超时只是客户端崩溃/漏发时的兜底。**
+如果客户端持续用心跳重报暂停中的同一首歌，事件时间会不断刷新，
+读取端无法区分「刚暂停」和「暂停了一小时」，媒体就不会消失 ——
+所以 §4.2.1 第 2 条必须由客户端实现，不能指望服务端或前端来猜。
+
 ---
+
+### 4.3 `device.status`
+
+设备遥测（电量 / 网络 / 屏幕）。客户端能取到时才发；它不描述"用户在看什么"，通常由心跳携带
+（`trigger: "heartbeat"`），或在状态变化时发（`trigger: "change"`）。
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `battery` | object | 否 | `{ level: int, charging: bool }`；`level` 取不到时为 `-1` |
+| `network` | object | 否 | `{ wifi: bool, type: string }` |
+| `screen` | object | 否 | `{ on: bool }` |
+| `os` | string | 否 | 系统版本，如 `"15"` |
+| `client_version` | string | 否 | 与 `client.version` 一致 |
+
+- `battery.level` 取值 `0–100`，**取不到时为 `-1`**；服务端钳制到 `[-1, 100]`，前端把 `-1` 显示为 `--`。
+- `network.type` **是开放字符串，不做枚举校验**：
+  `WIFI` / `ETHERNET` / `2G`–`5G` / `MOBILE(<subtype>)` / `OTHER(<type>)` / `NONE` / `UNKNOWN`。
+  客户端将来新增制式（如 `6G`），服务端与前端都不需要改。
+- 三个子对象**都可以整体缺失**（个别机型取不到）：缺失即不写该键，服务端不会因此拒绝事件。
+- 未知子字段按 §1.2 忽略。
+- 该类型**不是必发**：只发 `window.activity` 也完全合法；服务端不得因缺少 `device.status` 而报错。
+
+> 这是 §1.1「新增观测维度 = 新增一个 `type`」的第一个实例：信封、既有字段、既有 `type`
+> 的语义都没有改动，属于**非破坏性变更**。老服务端会把未知类型放进 `ignored[]` 回
+> `UNSUPPORTED_TYPE`，老客户端不受影响。
+
+服务端读取：`GET /api/v2/status` 的 `device` 字段返回该机器最新一条 `device.status` 的 `data`。
 
 ## 5. 触发原因 `trigger`
 
@@ -371,7 +443,7 @@ GET /api/v2/capabilities
 {
   "protocol_version": 2,
   "versions": [2],
-  "event_types": ["window.activity", "media.playback"],
+  "event_types": ["window.activity", "media.playback", "device.status"],
   "limits": {
     "max_events_per_request": 64,
     "max_request_bytes": 1048576,

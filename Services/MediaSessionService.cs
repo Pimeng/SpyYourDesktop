@@ -7,9 +7,10 @@ namespace Desktop.Services;
 public interface IMediaSessionService
 {
     /// <summary>
-    /// 读取当前系统媒体会话（SMTC）。没有会话或读取失败时返回 <c>null</c>。
+    /// 读取当前系统媒体会话（SMTC）。没有会话返回 <see cref="MediaSessionReadResult.NoSession"/>，
+    /// 读取失败返回 <see cref="MediaSessionReadResult.Unavailable"/>。
     /// </summary>
-    Task<MediaPlaybackSnapshot?> ReadCurrentAsync(CancellationToken cancellationToken);
+    Task<MediaSessionReadResult> ReadCurrentAsync(CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -22,20 +23,20 @@ public sealed class MediaSessionService(IAppLogger logger) : IMediaSessionServic
     private GlobalSystemMediaTransportControlsSessionManager? _manager;
     private bool _failureLogged;
 
-    public async Task<MediaPlaybackSnapshot?> ReadCurrentAsync(CancellationToken cancellationToken)
+    public async Task<MediaSessionReadResult> ReadCurrentAsync(CancellationToken cancellationToken)
     {
         try
         {
             var manager = await GetManagerAsync(cancellationToken);
             if (manager is null)
             {
-                return null;
+                return MediaSessionReadResult.Unavailable;
             }
 
             var session = manager.GetCurrentSession();
             if (session is null)
             {
-                return null;
+                return MediaSessionReadResult.NoSession;
             }
 
             var properties = await session.TryGetMediaPropertiesAsync().AsTask(cancellationToken);
@@ -48,7 +49,9 @@ public sealed class MediaSessionService(IAppLogger logger) : IMediaSessionServic
                 ToStatusText(status),
                 NormalizeSourceApp(session.SourceAppUserModelId));
 
-            return snapshot.HasContent ? snapshot : null;
+            return snapshot.HasContent
+                ? MediaSessionReadResult.FromSnapshot(snapshot)
+                : MediaSessionReadResult.NoSession;
         }
         catch (OperationCanceledException)
         {
@@ -62,7 +65,7 @@ public sealed class MediaSessionService(IAppLogger logger) : IMediaSessionServic
                 await logger.LogAsync($"[media] 无法读取系统媒体会话：{exception.Message}", cancellationToken);
             }
 
-            return null;
+            return MediaSessionReadResult.Unavailable;
         }
     }
 

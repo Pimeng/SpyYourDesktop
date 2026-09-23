@@ -24,6 +24,8 @@ public sealed class MonitoringService(
     private const int MaxServerErrorRetries = 3;
     private const int DefaultTitleLimit = 150;
     private const int TitleTruncateMargin = 10;
+    private static readonly TimeSpan MediaIdleTimeout =
+        TimeSpan.FromMilliseconds(IngestProtocol.DefaultMediaIdleTimeoutMs);
     private readonly object _stateLock = new();
     private readonly SemaphoreSlim _tickLock = new(1, 1);
     private readonly HashSet<string> _unsupportedEventTypes = new(StringComparer.Ordinal);
@@ -31,7 +33,11 @@ public sealed class MonitoringService(
     private Task? _loopTask;
     private MonitorSettings? _settings;
     private string? _lastTitle;
+    private MediaPlaybackSnapshot? _lastMediaSnapshot;
     private string? _lastMediaKey;
+    private string? _mediaSessionIdentity;
+    private DateTimeOffset? _mediaNonPlayingSince;
+    private bool _mediaCloseSent;
     private DateTimeOffset _lastSentAt = DateTimeOffset.MinValue;
     private IngestSessionInfo? _session;
     private long _sequence;
@@ -73,7 +79,7 @@ public sealed class MonitoringService(
         {
             _settings = settings;
             _lastTitle = null;
-            _lastMediaKey = null;
+            ResetMediaTracking();
             _lastSentAt = DateTimeOffset.MinValue;
             _session = new IngestSessionInfo
             {
@@ -224,22 +230,27 @@ public sealed class MonitoringService(
 
             MediaPlaybackSnapshot? media = null;
             var mediaTracked = settings.ReportMedia && !settings.PrivacyMode;
+            var mediaChanged = false;
+            var mediaClosed = false;
             if (mediaTracked)
             {
-                media = await mediaSession.ReadCurrentAsync(cancellationToken);
+                var read = await mediaSession.ReadCurrentAsync(cancellationToken);
+                if (read.Status != MediaSessionReadStatus.Unavailable)
+                {
+                    media = read.Snapshot;
+                    EvaluateMedia(media, DateTimeOffset.UtcNow, out mediaChanged, out mediaClosed);
+                }
             }
             else
             {
                 // 关闭媒体上报或进入隐私模式后不再跟踪，重新开启时会立即补报一次当前状态。
-                _lastMediaKey = null;
+                ResetMediaTracking();
             }
 
-            var mediaKey = media?.Key;
             var now = DateTimeOffset.UtcNow;
             var changed = !string.Equals(title, _lastTitle, StringComparison.Ordinal);
-            var mediaChanged = mediaTracked && !string.Equals(mediaKey, _lastMediaKey, StringComparison.Ordinal);
             var heartbeatDue = now - _lastSentAt >= GetHeartbeat();
-            if (forceTrigger is null && !changed && !mediaChanged && !heartbeatDue)
+            if (forceTrigger is null && !changed && !mediaChanged && !mediaClosed && !heartbeatDue)
             {
                 return;
             }
@@ -247,7 +258,7 @@ public sealed class MonitoringService(
             var batchTrigger = forceTrigger
                 ?? (changed
                     ? IngestProtocol.Triggers.Change
-                    : mediaChanged
+                    : mediaChanged || mediaClosed
                         ? IngestProtocol.Triggers.Media
                         : IngestProtocol.Triggers.Heartbeat);
 
@@ -267,7 +278,7 @@ public sealed class MonitoringService(
             };
 
             IngestEvent? mediaEvent = null;
-            if (media is not null)
+            if (mediaChanged && media is not null)
             {
                 mediaEvent = new IngestEvent
                 {
@@ -275,7 +286,7 @@ public sealed class MonitoringService(
                     Sequence = ++_sequence,
                     Type = IngestProtocol.EventTypes.MediaPlayback,
                     OccurredAt = ProtocolTime.ToUtc(now),
-                    Trigger = mediaChanged ? IngestProtocol.Triggers.Media : batchTrigger,
+                    Trigger = IngestProtocol.Triggers.Media,
                     Data = new MediaPlaybackData
                     {
                         Title = media.Title,
@@ -283,6 +294,26 @@ public sealed class MonitoringService(
                         Album = media.Album,
                         Status = media.PlaybackStatus,
                         Source = media.SourceApp
+                    }
+                };
+            }
+            else if (mediaClosed)
+            {
+                var closed = media ?? _lastMediaSnapshot;
+                mediaEvent = new IngestEvent
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    Sequence = ++_sequence,
+                    Type = IngestProtocol.EventTypes.MediaPlayback,
+                    OccurredAt = ProtocolTime.ToUtc(now),
+                    Trigger = IngestProtocol.Triggers.Media,
+                    Data = new MediaPlaybackData
+                    {
+                        Title = closed?.Title ?? string.Empty,
+                        Artist = closed?.Artist ?? string.Empty,
+                        Album = closed?.Album ?? string.Empty,
+                        Status = "closed",
+                        Source = closed?.SourceApp ?? string.Empty
                     }
                 };
             }
@@ -320,14 +351,23 @@ public sealed class MonitoringService(
 
             if (mediaEvent is not null && mediaTracked && result.IsDelivered(mediaEvent.Id))
             {
-                _lastMediaKey = mediaKey;
+                if (mediaClosed)
+                {
+                    _mediaCloseSent = true;
+                }
+                else
+                {
+                    _lastMediaKey = media?.Key;
+                    _mediaCloseSent = false;
+                }
             }
 
             _lastSentAt = now;
-            var mediaText = media?.DisplayText;
+            var mediaText = mediaClosed ? null : media?.DisplayText;
+            var mediaLog = mediaClosed ? "closed" : mediaText;
             await logger.LogAsync(
                 $"[sent {batchTrigger}] {now.LocalDateTime:yyyy-MM-dd HH:mm:ss} | {snapshot.Application} - {title}" +
-                (mediaText is null ? string.Empty : $" | media: {mediaText}"),
+                (mediaLog is null ? string.Empty : $" | media: {mediaLog}"),
                 cancellationToken);
             UsageSent?.Invoke(this, new UsageSentEventArgs(now.ToLocalTime(), snapshot.Application, title, mediaText));
         }
@@ -343,6 +383,83 @@ public sealed class MonitoringService(
         {
             _tickLock.Release();
         }
+    }
+
+    /// <summary>
+    /// 媒体生命周期判定（协议 §4.2.1）：会话从“有”变“无”时补一条 closed；
+    /// 会话停留在非 playing 状态超过 <see cref="MediaIdleTimeout"/> 后也发一条 closed。
+    /// 计时基准是进入非 playing 的时刻，心跳或重复上报不会刷新它。
+    /// </summary>
+    private void EvaluateMedia(
+        MediaPlaybackSnapshot? media,
+        DateTimeOffset now,
+        out bool mediaChanged,
+        out bool mediaClosed)
+    {
+        mediaChanged = false;
+        mediaClosed = false;
+
+        if (media is null)
+        {
+            _mediaNonPlayingSince = null;
+            if (!_mediaCloseSent && _lastMediaKey is not null)
+            {
+                mediaClosed = true;
+            }
+
+            return;
+        }
+
+        _lastMediaSnapshot = media;
+        var identity = MediaIdentity(media);
+        var sameSession = string.Equals(identity, _mediaSessionIdentity, StringComparison.Ordinal);
+        var closedSameSession = _mediaCloseSent && sameSession;
+        _mediaSessionIdentity = identity;
+        var sameKey = string.Equals(media.Key, _lastMediaKey, StringComparison.Ordinal);
+
+        if (string.Equals(media.PlaybackStatus, "playing", StringComparison.Ordinal))
+        {
+            _mediaNonPlayingSince = null;
+            mediaChanged = !sameKey || _mediaCloseSent;
+            return;
+        }
+
+        if (string.Equals(media.PlaybackStatus, "closed", StringComparison.Ordinal))
+        {
+            _mediaNonPlayingSince = null;
+            mediaClosed = !closedSameSession && _lastMediaKey is not null;
+            return;
+        }
+
+        if (!sameSession)
+        {
+            _mediaNonPlayingSince = now;
+        }
+
+        _mediaNonPlayingSince ??= now;
+
+        if (!closedSameSession && now - _mediaNonPlayingSince.Value >= MediaIdleTimeout)
+        {
+            mediaClosed = true;
+            return;
+        }
+
+        if (!closedSameSession && !sameKey)
+        {
+            mediaChanged = true;
+        }
+    }
+
+    private static string MediaIdentity(MediaPlaybackSnapshot media) =>
+        $"{media.SourceApp}\u001f{media.Title}\u001f{media.Artist}\u001f{media.Album}";
+
+    private void ResetMediaTracking()
+    {
+        _lastMediaSnapshot = null;
+        _lastMediaKey = null;
+        _mediaSessionIdentity = null;
+        _mediaNonPlayingSince = null;
+        _mediaCloseSent = false;
     }
 
     /// <summary>
