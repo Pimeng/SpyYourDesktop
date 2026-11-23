@@ -16,6 +16,9 @@ public static class IngestProtocol
     /// <summary>媒体空闲超时默认值（毫秒）：非播放态的媒体会话持续该时长后视为没有当前媒体。</summary>
     public const int DefaultMediaIdleTimeoutMs = 180_000;
 
+    /// <summary>被动触发模式下的固定心跳间隔（毫秒）：5 分钟。</summary>
+    public const int PassiveHeartbeatMs = 300_000;
+
     /// <summary>事件类型。新增类型是非破坏性扩展。</summary>
     public static class EventTypes
     {

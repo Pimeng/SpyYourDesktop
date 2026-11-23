@@ -11,7 +11,7 @@ public interface IMonitoringService : IAsyncDisposable
     event EventHandler<MonitoringErrorEventArgs>? Error;
     Task StartAsync(MonitorSettings settings, CancellationToken applicationCancellation);
     Task StopAsync();
-    void UpdateRuntimeSettings(int intervalMs, int heartbeatMs, bool forceAllowLongTitle, bool reportMedia);
+    void UpdateRuntimeSettings(int intervalMs, int heartbeatMs, bool forceAllowLongTitle, bool reportMedia, bool passiveMode);
     Task SendCurrentAsync(bool privacyMode, CancellationToken cancellationToken);
 }
 
@@ -148,7 +148,7 @@ public sealed class MonitoringService(
         }
     }
 
-    public void UpdateRuntimeSettings(int intervalMs, int heartbeatMs, bool forceAllowLongTitle, bool reportMedia)
+    public void UpdateRuntimeSettings(int intervalMs, int heartbeatMs, bool forceAllowLongTitle, bool reportMedia, bool passiveMode)
     {
         lock (_stateLock)
         {
@@ -162,7 +162,8 @@ public sealed class MonitoringService(
                 IntervalMs = Math.Clamp(intervalMs, 0, 3600000),
                 HeartbeatMs = Math.Clamp(heartbeatMs, 0, 3600000),
                 ForceAllowLongTitle = forceAllowLongTitle,
-                ReportMedia = reportMedia
+                ReportMedia = reportMedia,
+                PassiveMode = passiveMode
             };
         }
     }
@@ -202,6 +203,12 @@ public sealed class MonitoringService(
     {
         lock (_stateLock)
         {
+            // 被动触发模式固定 5 分钟心跳，忽略用户配置的心跳间隔。
+            if (_settings?.PassiveMode == true)
+            {
+                return TimeSpan.FromMilliseconds(IngestProtocol.PassiveHeartbeatMs);
+            }
+
             return TimeSpan.FromMilliseconds(Math.Clamp(_settings?.HeartbeatMs ?? 5000, 0, 3600000));
         }
     }
@@ -253,9 +260,11 @@ public sealed class MonitoringService(
             var heartbeatDue = now - _lastSentAt >= GetHeartbeat();
 
             // 播放中的会话即使曲目未变，也在心跳/强制上报时补发一条，让播放位置保持新鲜。
+            // 被动触发模式只在状态变化时上报，不借心跳刷新进度。
             var mediaProgressDue = media is not null
                 && !mediaChanged
                 && !mediaClosed
+                && !settings.PassiveMode
                 && string.Equals(media.PlaybackStatus, "playing", StringComparison.Ordinal)
                 && (forceTrigger is not null || heartbeatDue);
 

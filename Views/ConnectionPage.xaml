@@ -95,8 +95,17 @@
                                    Value="{Binding HeartbeatMs, Mode=TwoWay}"
                                    Minimum="0"
                                    Maximum="3600000"
+                                   IsEnabled="{Binding HeartbeatEditable}"
                                    HorizontalAlignment="Stretch" />
                     </Grid>
+                    <ToggleSwitch Header="被动触发模式"
+                                  OnContent="已开启"
+                                  OffContent="已关闭"
+                                  IsOn="{Binding PassiveMode, Mode=TwoWay}"
+                                  HorizontalAlignment="Stretch" />
+                    <TextBlock Text="开启后心跳固定为 5 分钟（上方心跳设置失效），仅在前台窗口或媒体状态发生变化时才上报，其它情况不上报，以尽量减少流量。媒体进度也不再随心跳刷新，只在曲目或播放状态变化时更新。默认关闭。"
+                               Opacity="0.68"
+                               TextWrapping="Wrap" />
                     <Grid RowSpacing="14" ColumnSpacing="18">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />

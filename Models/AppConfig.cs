@@ -82,4 +82,10 @@ public sealed class AppConfig
     /// </summary>
     [JsonPropertyName("reportMedia")]
     public bool ReportMedia { get; set; }
+
+    /// <summary>
+    /// 被动触发模式：固定 5 分钟心跳，仅在状态变化时上报，其它情况不上报。默认关闭。
+    /// </summary>
+    [JsonPropertyName("passiveMode")]
+    public bool PassiveMode { get; set; }
 }

@@ -42,6 +42,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
     private bool _privacyMode;
     private bool _forceAllowLongTitle;
     private bool _reportMedia;
+    private bool _passiveMode;
     private bool _isRunning;
     private bool _isBusy;
     private bool _isInitialized;
@@ -260,6 +261,25 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         set => SetProperty(ref _reportMedia, value);
     }
 
+    /// <summary>被动触发模式：固定 5 分钟心跳，仅在状态变化时上报。</summary>
+    public bool PassiveMode
+    {
+        get => _passiveMode;
+        set
+        {
+            if (!SetProperty(ref _passiveMode, value))
+            {
+                return;
+            }
+
+            // 被动模式下心跳固定，禁用心跳输入框。
+            OnPropertyChanged(nameof(HeartbeatEditable));
+        }
+    }
+
+    /// <summary>心跳间隔是否可编辑。被动触发模式下心跳固定 5 分钟，不允许修改。</summary>
+    public bool HeartbeatEditable => !_passiveMode;
+
     public int LongTitleModeIndex
     {
         get => ForceAllowLongTitle ? 1 : 0;
@@ -448,6 +468,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         _allowBackground = config.AllowBackground;
         _forceAllowLongTitle = config.ForceAllowLongTitle;
         _reportMedia = config.ReportMedia;
+        _passiveMode = config.PassiveMode;
         _skippedVersion = config.SkippedVersion;
         _privacyMode = false;
 
@@ -837,7 +858,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             AllowBackground = AllowBackground,
             SkippedVersion = _skippedVersion,
             ForceAllowLongTitle = ForceAllowLongTitle,
-            ReportMedia = ReportMedia
+            ReportMedia = ReportMedia,
+            PassiveMode = PassiveMode
         }, cancellationToken);
     }
 
@@ -871,7 +893,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             UploadKey,
             PrivacyMode,
             ForceAllowLongTitle,
-            ReportMedia);
+            ReportMedia,
+            PassiveMode);
         message = string.Empty;
         return true;
     }
@@ -966,6 +989,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
         OnPropertyChanged(nameof(ForceAllowLongTitle));
         OnPropertyChanged(nameof(LongTitleModeIndex));
         OnPropertyChanged(nameof(ReportMedia));
+        OnPropertyChanged(nameof(PassiveMode));
+        OnPropertyChanged(nameof(HeartbeatEditable));
     }
 
     private void RaiseCommandStates()
@@ -1016,13 +1041,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             nameof(IntervalMs) or
             nameof(HeartbeatMs) or
             nameof(ForceAllowLongTitle) or
-            nameof(ReportMedia))
+            nameof(ReportMedia) or
+            nameof(PassiveMode))
         {
             _monitoringService.UpdateRuntimeSettings(
                 IntervalMs,
                 HeartbeatMs,
                 ForceAllowLongTitle,
-                ReportMedia);
+                ReportMedia,
+                PassiveMode);
         }
 
         if (_isInitialized && propertyName is
@@ -1035,7 +1062,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IAsyncDisposable
             nameof(StartupModeIndex) or
             nameof(AllowBackground) or
             nameof(ForceAllowLongTitle) or
-            nameof(ReportMedia))
+            nameof(ReportMedia) or
+            nameof(PassiveMode))
         {
             QueueConfigurationSave();
         }

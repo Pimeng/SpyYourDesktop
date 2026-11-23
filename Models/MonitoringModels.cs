@@ -8,7 +8,8 @@ public sealed record MonitorSettings(
     string UploadKey,
     bool PrivacyMode,
     bool ForceAllowLongTitle,
-    bool ReportMedia);
+    bool ReportMedia,
+    bool PassiveMode);
 
 public sealed record ForegroundWindowSnapshot(string Title, string Application, int ProcessId);
 
