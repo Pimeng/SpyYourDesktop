@@ -251,6 +251,14 @@ public sealed class MonitoringService(
             var now = DateTimeOffset.UtcNow;
             var changed = !string.Equals(title, _lastTitle, StringComparison.Ordinal);
             var heartbeatDue = now - _lastSentAt >= GetHeartbeat();
+
+            // 播放中的会话即使曲目未变，也在心跳/强制上报时补发一条，让播放位置保持新鲜。
+            var mediaProgressDue = media is not null
+                && !mediaChanged
+                && !mediaClosed
+                && string.Equals(media.PlaybackStatus, "playing", StringComparison.Ordinal)
+                && (forceTrigger is not null || heartbeatDue);
+
             if (forceTrigger is null && !changed && !mediaChanged && !mediaClosed && !heartbeatDue)
             {
                 return;
@@ -279,7 +287,7 @@ public sealed class MonitoringService(
             };
 
             IngestEvent? mediaEvent = null;
-            if (mediaChanged && media is not null)
+            if ((mediaChanged || mediaProgressDue) && media is not null)
             {
                 mediaEvent = new IngestEvent
                 {
@@ -287,15 +295,8 @@ public sealed class MonitoringService(
                     Sequence = ++_sequence,
                     Type = IngestProtocol.EventTypes.MediaPlayback,
                     OccurredAt = ProtocolTime.ToUtc(now),
-                    Trigger = IngestProtocol.Triggers.Media,
-                    Data = new MediaPlaybackData
-                    {
-                        Title = media.Title,
-                        Artist = media.Artist,
-                        Album = media.Album,
-                        Status = media.PlaybackStatus,
-                        Source = media.SourceApp
-                    }
+                    Trigger = mediaChanged ? IngestProtocol.Triggers.Media : batchTrigger,
+                    Data = BuildMediaData(media, now)
                 };
             }
             else if (mediaClosed)
@@ -314,7 +315,8 @@ public sealed class MonitoringService(
                         Artist = closed?.Artist ?? string.Empty,
                         Album = closed?.Album ?? string.Empty,
                         Status = "closed",
-                        Source = closed?.SourceApp ?? string.Empty
+                        Source = closed?.SourceApp ?? string.Empty,
+                        SourceName = string.IsNullOrEmpty(closed?.SourceName) ? null : closed.SourceName
                     }
                 };
             }
@@ -449,6 +451,34 @@ public sealed class MonitoringService(
         {
             mediaChanged = true;
         }
+    }
+
+    /// <summary>
+    /// 把媒体快照映射为上报负载。<c>position_age_ms</c> 在构建时按上报时刻与采样时刻的差计算，
+    /// 让读取端能从 <c>position_ms</c> 外推出当前播放位置。
+    /// </summary>
+    private static MediaPlaybackData BuildMediaData(MediaPlaybackSnapshot media, DateTimeOffset now)
+    {
+        long? positionAgeMs = null;
+        if (media.PositionMs.HasValue && media.PositionCapturedAt.HasValue)
+        {
+            var age = (now - media.PositionCapturedAt.Value).TotalMilliseconds;
+            positionAgeMs = (long)Math.Max(0, age);
+        }
+
+        return new MediaPlaybackData
+        {
+            Title = media.Title,
+            Artist = media.Artist,
+            Album = media.Album,
+            Status = media.PlaybackStatus,
+            Source = media.SourceApp,
+            SourceName = string.IsNullOrEmpty(media.SourceName) ? null : media.SourceName,
+            DurationMs = media.DurationMs,
+            PositionMs = media.PositionMs,
+            PositionAgeMs = positionAgeMs,
+            PlaybackSpeed = media.PlaybackSpeed
+        };
     }
 
     private static string MediaIdentity(MediaPlaybackSnapshot media) =>

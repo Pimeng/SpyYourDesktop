@@ -109,7 +109,12 @@
         "artist": "周杰伦",
         "album": "十一月的萧邦",
         "status": "playing",
-        "source": "Spotify"
+        "source": "cloudmusic",
+        "source_name": "网易云音乐",
+        "duration_ms": 227000,
+        "position_ms": 65230,
+        "position_age_ms": 12,
+        "playback_speed": 1
       }
     }
   ]
@@ -206,6 +211,11 @@
 | `album` | string | 是 | 专辑 |
 | `status` | string | 是 | `playing` / `paused` / `stopped` / `changing` / `closed`，未知时为空串 |
 | `source` | string | 是 | 来源应用，取自 AUMID 的规范化短名（如 `Spotify`） |
+| `source_name` | string \| 省略 | 否 | 来源应用的友好显示名（如 `网易云音乐`）。仅对已知播放器给出，未知时省略 |
+| `duration_ms` | int \| 省略 | 否 | 曲目总时长（毫秒）。无时间轴信息时省略 |
+| `position_ms` | int \| 省略 | 否 | **采样时刻**的播放位置（毫秒）。无时间轴信息时省略 |
+| `position_age_ms` | int \| 省略 | 否 | `position_ms` 距本次上报时刻的时长（毫秒）。读取端据此外推当前位置，见 §4.2.3 |
+| `playback_speed` | number \| 省略 | 否 | 播放速率。省略时按 `1` 处理 |
 
 > **兼容提示**：`status` 是开放字符串。客户端遇到不认识的 SMTC 状态会原样上报，服务端应把未知值当作"状态未知"处理，不要丢弃整个事件。
 
@@ -250,6 +260,20 @@
 如果客户端持续用心跳重报暂停中的同一首歌，事件时间会不断刷新，
 读取端无法区分「刚暂停」和「暂停了一小时」，媒体就不会消失 ——
 所以 §4.2.1 第 2 条必须由客户端实现，不能指望服务端或前端来猜。
+
+#### 4.2.3 播放进度（`position_ms` / `position_age_ms`）
+
+播放位置持续变化，逐秒上报既浪费带宽也无必要。协议约定：客户端只上报**某一采样时刻的位置快照**，
+由读取端外推出"此刻"的位置。
+
+- `position_ms` 是**采样时刻**（而非上报时刻）的位置；`position_age_ms` 是该采样距本条事件上报时刻已经过去的毫秒数。
+  SMTC 给出的位置本就带一个"最后更新时间"，`position_age_ms` 正是用它与上报时刻之差算出的，二者不要混淆。
+- 读取端外推：`当前位置 ≈ position_ms + (now - received_at + position_age_ms) × playback_speed`，
+  并钳制在 `[0, duration_ms]`。仅在 `status == "playing"` 时外推；其它状态视位置为静止。
+- 这些字段**不参与**"媒体是否变化"的判定：位置变化本身不触发 `trigger: "change"` 的补报。
+- 为了让位置保持新鲜，客户端在**播放中**的会话上，除曲目/状态变化外，还会在心跳到期时补发一条携带最新
+  `position_ms` 的事件（`trigger` 通常为 `heartbeat`）。暂停/停止态的会话不借心跳刷新位置（位置本就静止）。
+- 字段均为可选：应用未提供时间轴时省略 `duration_ms` / `position_ms` / `position_age_ms`；`playback_speed` 省略时按 `1` 处理。
 
 ---
 

@@ -216,6 +216,31 @@ public sealed class MediaPlaybackData
 
     [JsonPropertyName("source")]
     public string Source { get; init; } = string.Empty;
+
+    /// <summary>来源应用的友好显示名（如“网易云音乐”）。未知时省略。</summary>
+    [JsonPropertyName("source_name")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? SourceName { get; init; }
+
+    /// <summary>曲目总时长（毫秒）。无时间轴信息时省略。</summary>
+    [JsonPropertyName("duration_ms")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? DurationMs { get; init; }
+
+    /// <summary>采样时刻的播放位置（毫秒）。无时间轴信息时省略。</summary>
+    [JsonPropertyName("position_ms")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? PositionMs { get; init; }
+
+    /// <summary><see cref="PositionMs"/> 距本次上报时刻的时长（毫秒）。读取端据此外推当前位置。</summary>
+    [JsonPropertyName("position_age_ms")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public long? PositionAgeMs { get; init; }
+
+    /// <summary>播放速率。省略时读取端按 1 处理。</summary>
+    [JsonPropertyName("playback_speed")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public double? PlaybackSpeed { get; init; }
 }
 
 #endregion
